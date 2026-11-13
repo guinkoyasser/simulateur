@@ -1,0 +1,1852 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulateur du lab Nmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Ubuntu:wght@400;500;700&family=Ubuntu+Mono&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f3f4f8;--ink:#15181f;--muted:#56606e;--line:#dbe1e8;--panel:#ffffff;
+  --accent:#2e6bd4;--accent-ink:#ffffff;--warn:#b45309;--good:#15803d;--bad:#b91c1c;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1218;--ink:#e6eaf0;--muted:#8794a3;--line:#2a2f3a;--panel:#171b23;
+    --accent:#6ba6ff;--accent-ink:#0b1420;
+  }
+}
+:root[data-theme="dark"]{--bg:#0f1218;--ink:#e6eaf0;--muted:#8794a3;--line:#2a2f3a;--panel:#171b23;--accent:#6ba6ff;--accent-ink:#0b1420;}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:-0.01em}
+h1{font-size:1.3rem}h2{font-size:1.1rem}h3{font-size:0.98rem}h4{font-size:0.9rem;color:var(--muted);text-transform:none;font-weight:500}
+code{font-family:var(--mono);font-size:0.88em;background:color-mix(in srgb,var(--line) 45%,transparent);padding:1px 5px;border-radius:3px}
+
+.skip{position:absolute;left:-999px;top:0;background:var(--accent);color:var(--accent-ink);padding:8px 12px;z-index:100}
+.skip:focus{left:8px;top:8px}
+
+/* ================ Top bar — barre de la fenêtre VMware ================ */
+.vmbar{background:#1c2026;color:#e8ebf0;padding:6px 14px;display:flex;align-items:center;gap:16px;border-bottom:1px solid #000;font-size:0.82rem}
+.vmbar .brand{color:#9fb0c7;font-weight:600;letter-spacing:0.02em}
+.vmbar .vmtabs{display:flex;gap:2px;flex:1;min-width:0}
+.vmbar .vmtab{background:#2a2f38;border:0;color:#aab6c6;padding:6px 14px;border-radius:5px 5px 0 0;cursor:pointer;font-size:0.82rem;display:flex;align-items:center;gap:7px;white-space:nowrap}
+.vmbar .vmtab[aria-selected="true"]{background:#3a414c;color:#fff}
+.vmbar .vmtab .dot{width:7px;height:7px;background:#4ade80;border-radius:50%;display:inline-block}
+.vmbar .vmtab.k .dot{background:#8b5cf6}
+.vmbar .vmtab.c .dot{background:#f97316}
+.vmbar .right{display:flex;align-items:center;gap:10px}
+.vmbar select{background:#2a2f38;border:1px solid #444;color:#e8ebf0;padding:3px 7px;border-radius:3px;font-size:0.8rem}
+.vmbar .simchip{background:#3b2a0a;color:#fbbf24;border:1px solid #92610e;padding:3px 9px;border-radius:3px;font-size:0.72rem;font-weight:600;letter-spacing:0.04em}
+
+/* ================ Progress ================ */
+.progress{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px}
+.progress-row{display:flex;align-items:center;gap:14px;max-width:1500px;margin:0 auto}
+.progress-text{font-size:0.82rem;color:var(--muted);white-space:nowrap}
+.progress-bar{flex:1;height:5px;background:var(--line);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),#4ade80);transition:width 0.4s ease}
+.btn-ghost{background:transparent;border:1px solid var(--line);color:var(--muted);padding:4px 9px;border-radius:4px;font-size:0.78rem;cursor:pointer}
+.btn-ghost:hover{color:var(--ink);border-color:var(--muted)}
+
+/* ================ Layout ================ */
+.layout{display:grid;grid-template-columns:minmax(300px,360px) minmax(0,1fr) minmax(290px,340px);gap:14px;padding:14px;max-width:1500px;margin:0 auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:7px;overflow:hidden;display:flex;flex-direction:column}
+.panel-h{padding:12px 16px;border-bottom:1px solid var(--line)}
+.panel-h h2{margin:0}
+.panel-h .sub{color:var(--muted);font-size:0.85rem;margin-top:3px}
+.panel-b{padding:16px;overflow-y:auto}
+
+/* --- Mission --- */
+.mission-tag{color:var(--muted);font-size:0.78rem;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:4px}
+.mission-title{font-size:1.15rem;font-weight:700;color:var(--ink);line-height:1.3}
+.mission-sub{color:var(--muted);font-size:0.88rem;margin-top:4px}
+.part-pill{display:inline-block;padding:2px 9px;border-radius:999px;font-weight:700;font-size:0.72rem;letter-spacing:0.04em;text-transform:uppercase}
+.part-pill.off{background:color-mix(in srgb,var(--good) 20%,transparent);color:var(--good)}
+.part-pill.on{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+.part-pill.meta{background:color-mix(in srgb,var(--muted) 20%,transparent);color:var(--muted)}
+.part-step{margin-left:8px;color:var(--muted);font-size:0.78rem;text-transform:none;letter-spacing:0}
+.part-banner{margin-top:14px;padding:12px 14px;border-radius:6px;border:1px solid var(--line)}
+.part-banner.off{background:color-mix(in srgb,var(--good) 8%,transparent);border-color:color-mix(in srgb,var(--good) 35%,var(--line))}
+.part-banner.on{background:color-mix(in srgb,var(--warn) 8%,transparent);border-color:color-mix(in srgb,var(--warn) 35%,var(--line))}
+.part-banner-title{font-weight:700;font-size:0.95rem;margin-bottom:4px}
+.part-banner-goal{color:var(--muted);font-size:0.88rem;line-height:1.5}
+.objective{margin-top:14px;padding:10px 14px;background:color-mix(in srgb,var(--accent) 8%,transparent);border-left:3px solid var(--accent);border-radius:4px}
+.objective-label{font-size:0.76rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.objective-text{font-size:0.92rem;line-height:1.5}
+.prereq{margin-top:10px;padding:10px 14px;background:color-mix(in srgb,var(--warn) 14%,transparent);border-left:3px solid var(--warn);border-radius:4px}
+.prereq-label{font-size:0.76rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--warn);margin-bottom:4px}
+.prereq-text{font-size:0.9rem;line-height:1.5}
+.seq-done{color:var(--good)}
+.lesson{margin-top:16px;line-height:1.65}
+.lesson b{color:var(--ink)}
+.concepts{margin-top:18px}
+.concepts h4{margin-bottom:8px}
+.concept{padding:10px 12px;background:color-mix(in srgb,var(--line) 30%,transparent);border-radius:5px;margin-bottom:7px}
+.concept-name{font-weight:600;font-size:0.9rem}
+.concept-def{color:var(--muted);font-size:0.88rem;margin-top:3px}
+.todo{margin-top:20px;padding:12px 14px;background:color-mix(in srgb,var(--accent) 10%,transparent);border-left:3px solid var(--accent);border-radius:4px}
+.todo-label{font-size:0.76rem;color:var(--accent);font-weight:600;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:5px}
+.todo-cmd{font-family:var(--mono);font-size:0.88rem;color:var(--ink);word-break:break-all}
+.todo-seq{display:flex;flex-direction:column;gap:3px;margin-top:4px}
+.todo-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;padding:7px 13px;border-radius:4px;cursor:pointer;font-weight:500;font-size:0.88rem}
+.btn:hover{filter:brightness(1.1)}
+.btn.sec{background:transparent;border:1px solid var(--line);color:var(--ink);font-weight:400}
+.btn.sec:hover{border-color:var(--accent);color:var(--accent)}
+.feedback{margin-top:10px;padding:8px 11px;border-radius:4px;font-size:0.87rem}
+.feedback.err{background:color-mix(in srgb,var(--bad) 15%,transparent);color:var(--bad);border-left:3px solid var(--bad)}
+.nav{display:flex;gap:8px;margin-top:20px;padding-top:14px;border-top:1px solid var(--line)}
+.nav .btn{flex:1}
+
+/* --- Terminal — ressemble à un vrai terminal --- */
+.console{padding:0;overflow:hidden}
+.term{height:100%;display:flex;flex-direction:column}
+.term-chrome{background:#2a2a2a;padding:7px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #000}
+.term-chrome .dots{display:flex;gap:6px}
+.term-chrome .dot{width:12px;height:12px;border-radius:50%}
+.term-chrome .dot.r{background:#ff5f56}
+.term-chrome .dot.y{background:#ffbd2e}
+.term-chrome .dot.g{background:#27c93f}
+.term-chrome .title{color:#ccc;font-size:0.8rem;flex:1;text-align:center;font-family:var(--sans)}
+.term-screen{flex:1;overflow-y:auto;font-family:var(--mono);font-size:13.5px;line-height:1.45;padding:14px 16px;white-space:pre-wrap;word-break:break-word}
+.term-screen:focus{outline:none}
+.term-input-wrap{border-top:1px solid #000;padding:8px 16px 12px;font-family:var(--mono);font-size:13.5px}
+.term-input-wrap .prompt-top{margin-bottom:2px}
+.term-input-wrap .ilbl{display:flex;gap:7px;align-items:center}
+.term-input-wrap input{flex:1;background:transparent;border:0;outline:none;color:inherit;font:inherit;padding:2px 0}
+.term-input-wrap input:disabled{opacity:0.5}
+
+/* Kali — bleu très sombre */
+.term.kali .term-chrome{background:#242424}
+.term.kali .term-chrome .title{color:#a8a8a8}
+.term.kali .term-screen,.term.kali .term-input-wrap{background:#0e1419;color:#d7dae0}
+.term.kali .kp1{color:#5ff967}
+.term.kali .kp2{color:#5cd3f5}
+.term.kali .kp3{color:#5ff967}
+.term.kali .user{color:#5ff967}
+.term.kali .at{color:#d7dae0}
+.term.kali .host{color:#5cd3f5}
+.term.kali .path{color:#d7dae0}
+
+/* Ubuntu — console TTY noire */
+.term.cible .term-chrome{background:#111}
+.term.cible .term-chrome .title{color:#999}
+.term.cible .term-screen,.term.cible .term-input-wrap{background:#0a0a0a;color:#eaeaea;font-family:"Ubuntu Mono",var(--mono)}
+.term.cible .term-screen,.term.cible .term-input-wrap{font-size:14px}
+.term.cible .user,.term.cible .host{color:#ffffff;font-weight:500}
+.term.cible .path{color:#8ec4ff}
+
+/* sorties — colorisation des états Nmap */
+.out{margin:0 0 10px}
+.err{color:#ff8a8a;margin:0 0 10px}
+.sys{color:#9aa4b0;font-style:italic;margin:0 0 10px;font-size:0.85em}
+.st-open{color:#5ff967;font-weight:600}
+.st-closed{color:#aab6c6}
+.st-filtered{color:#fcc04f;font-weight:600}
+.st-unfiltered{color:#8ec4ff}
+.st-of{color:#c9a6ff;font-weight:600}
+
+/* --- Analyse --- */
+.analysis{display:flex;flex-direction:column;gap:14px}
+.a-empty{color:var(--muted);font-style:italic;text-align:center;padding:30px 20px}
+.a-block{padding:12px 14px;border-radius:5px;border-left:3px solid var(--line)}
+.a-block.see{background:color-mix(in srgb,#8ec4ff 10%,transparent);border-left-color:#8ec4ff}
+.a-block.why{background:color-mix(in srgb,#fcc04f 10%,transparent);border-left-color:#fcc04f}
+.a-block.keep{background:color-mix(in srgb,#4ade80 10%,transparent);border-left-color:#4ade80}
+.a-block h4{margin:0 0 5px;color:var(--ink);font-weight:700;font-size:0.82rem;letter-spacing:0.03em;text-transform:uppercase}
+.a-block b{color:var(--ink)}
+
+/* --- Panneau cible --- */
+.ctrl{margin-top:16px;padding:12px 14px;background:color-mix(in srgb,var(--line) 25%,transparent);border-radius:5px;font-size:0.87rem}
+.ctrl h4{margin-bottom:6px;color:var(--ink);font-weight:600}
+.ctrl .ch{display:flex;align-items:center;gap:7px;padding:3px 0;font-size:0.88rem}
+.ctrl input[type=checkbox]{accent-color:var(--accent)}
+.ctrl .rules{width:100%;margin-top:6px;font-size:0.85rem;border-collapse:collapse}
+.ctrl .rules th{text-align:left;color:var(--muted);font-weight:500;padding:3px 0}
+.ctrl .rules td{padding:2px 0}
+.ctrl .rules td:first-child{font-family:var(--mono);width:5rem}
+.ctrl select{padding:2px 6px;background:var(--panel);border:1px solid var(--line);border-radius:3px}
+.ctrl .quick{margin-top:9px;width:100%}
+
+/* --- Modal --- */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:50}
+.modal[hidden]{display:none}
+.modal-body{background:var(--panel);border-radius:8px;max-width:420px;padding:24px;box-shadow:0 10px 40px rgba(0,0,0,0.3)}
+.modal-body h2{margin-bottom:8px}
+.modal-body p{color:var(--muted);margin:0 0 16px}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end}
+
+footer{max-width:1500px;margin:0 auto;padding:14px 20px 30px;color:var(--muted);font-size:0.82rem;display:flex;gap:16px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+
+@media (max-width:1150px){
+  .layout{grid-template-columns:minmax(0,1fr) minmax(300px,340px);grid-template-areas:"mission ctrl" "term term" "analysis analysis"}
+  .panel.mission{grid-area:mission}
+  .panel.ctrl-col{grid-area:ctrl}
+  .panel.console{grid-area:term}
+  .panel.analysis-col{grid-area:analysis}
+}
+@media (max-width:760px){
+  .layout{grid-template-columns:minmax(0,1fr);grid-template-areas:"mission" "term" "analysis" "ctrl"}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
+</style>
+</head>
+<body>
+<a class="skip" href="#term" data-i18n="skipLink">Aller au terminal</a>
+
+<!-- Barre VMware -->
+<div class="vmbar">
+  <span class="brand">VMware Workstation</span>
+  <div class="vmtabs" role="tablist" aria-label="Virtual Machines">
+    <button class="vmtab k" role="tab" id="tab-kali" aria-selected="true" aria-controls="term"><span class="dot"></span><span data-i18n="vmKali">Analyse-Kali</span></button>
+    <button class="vmtab c" role="tab" id="tab-cible" aria-selected="false" aria-controls="term"><span class="dot"></span><span data-i18n="vmCible">Cible-Ubuntu-Server</span></button>
+  </div>
+  <div class="right">
+    <span class="simchip" data-i18n="simBadge" data-i18n-title="simTip" title="Rien n'est scanné : tout est calculé dans la page.">Simulation</span>
+    <label style="display:flex;gap:6px;align-items:center"><span id="lang-label" data-i18n="lang" style="color:#9fb0c7;font-size:0.78rem">Langue</span>
+    <select id="lang-sel"><option value="fr">Français</option><option value="en">English</option></select></label>
+  </div>
+</div>
+
+<!-- Progress -->
+<div class="progress">
+  <div class="progress-row">
+    <span class="progress-text" id="p-text">Mission 1/18</span>
+    <div class="progress-bar"><div class="progress-fill" id="p-fill" style="width:5%"></div></div>
+    <button class="btn-ghost" id="btn-restart" data-i18n="restart">Recommencer le jeu</button>
+  </div>
+</div>
+
+<main class="layout">
+  <!-- Mission panel -->
+  <section class="panel mission" aria-labelledby="m-h">
+    <div class="panel-b" id="m-body">
+      <div class="mission-tag" id="m-tag"></div>
+      <div class="mission-title" id="m-h"></div>
+      <div class="mission-sub" id="m-sub"></div>
+      <div class="part-banner" id="m-partintro" hidden>
+        <div class="part-banner-title" id="m-partintro-title"></div>
+        <div class="part-banner-goal" id="m-partintro-goal"></div>
+      </div>
+      <div class="objective" id="m-obj" hidden>
+        <div class="objective-label" id="m-obj-label" data-i18n="objectiveLabel">🎯 Objectif</div>
+        <div class="objective-text" id="m-obj-text"></div>
+      </div>
+      <div class="prereq" id="m-prereq" hidden>
+        <div class="prereq-label" id="m-prereq-label" data-i18n="prereqLabel">⚠️ Avant de continuer</div>
+        <div class="prereq-text" id="m-prereq-text"></div>
+      </div>
+      <div class="lesson" id="m-lesson"></div>
+      <div class="concepts" id="m-concepts" hidden></div>
+      <div class="todo" id="m-todo" hidden>
+        <div class="todo-label" id="m-todolabel" data-i18n="do">À faire</div>
+        <div class="todo-cmd" id="m-todocmd"></div>
+        <div class="todo-actions">
+          <button class="btn sec" id="btn-fill" data-i18n="fillHint">Pré-remplir</button>
+          <button class="btn" id="btn-done" data-i18n="doneBtn" hidden>J'ai lu, continuer</button>
+        </div>
+        <div class="feedback" id="m-fb" hidden></div>
+      </div>
+      <div class="nav">
+        <button class="btn sec" id="btn-prev" disabled>← Mission précédente</button>
+        <button class="btn" id="btn-next" disabled>Mission suivante →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Terminal -->
+  <section class="panel console" id="term-wrap" aria-label="Terminal">
+    <div class="term kali" id="term">
+      <div class="term-chrome">
+        <div class="dots"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+        <div class="title" id="term-title">kali@labkali: ~</div>
+      </div>
+      <div class="term-screen" id="screen" tabindex="0" role="log" aria-live="polite"></div>
+      <div class="term-input-wrap">
+        <div class="prompt-top" id="prompt-top"></div>
+        <form class="ilbl" id="cmd-form" autocomplete="off">
+          <span id="prompt-end"></span>
+          <input id="cmd" type="text" spellcheck="false" autocapitalize="off" aria-label="Command">
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- Analysis + Ctrl -->
+  <aside class="panel analysis-col" aria-labelledby="a-h">
+    <div class="panel-h"><h2 id="a-h" data-i18n="analysis">Analyse de la sortie</h2></div>
+    <div class="panel-b">
+      <div class="analysis" id="analysis">
+        <p class="a-empty" id="a-empty" data-i18n="analysisEmpty">Exécutez la commande pour voir l'analyse ici.</p>
+      </div>
+      <div class="ctrl" id="ctrl">
+        <h4 data-i18n="panel">Panneau de contrôle de la cible</h4>
+        <p data-i18n="panelDesc" style="margin:2px 0 8px;color:var(--muted);font-size:0.82rem">Modifie l'état réel de la cible (certaines missions l'utilisent).</p>
+        <label class="ch"><input type="checkbox" id="c-ssh"> <span data-i18n="ssh">SSH actif (port 22)</span></label>
+        <label class="ch"><input type="checkbox" id="c-apache"> <span data-i18n="apache">Apache actif (port 80)</span></label>
+        <label class="ch"><input type="checkbox" id="c-https"> <span data-i18n="https">HTTPS actif (port 443)</span></label>
+        <label class="ch"><input type="checkbox" id="c-ufw"> <span data-i18n="ufwOn">Pare-feu ufw actif</span></label>
+        <label class="ch"><input type="checkbox" id="c-nat"> <span data-i18n="natOn">Carte NAT branchée</span></label>
+        <h4 data-i18n="rulesTitle" style="margin-top:10px">Règles du pare-feu</h4>
+        <table class="rules">
+          <tbody>
+            <tr><td>22/tcp</td><td><select id="r-22"></select></td></tr>
+            <tr><td>80/tcp</td><td><select id="r-80"></select></td></tr>
+            <tr><td>443/tcp</td><td><select id="r-443"></select></td></tr>
+          </tbody>
+        </table>
+        <button class="btn sec quick" id="q-ufw" data-i18n="quickUfw">Activer le pare-feu avec les règles (22 ALLOW, 80 DENY)</button>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <span data-i18n="aboutBody">Simulation pédagogique basée sur un lab VMware réel (Kali, Ubuntu Server, Nmap 7.99). Chaque sortie reproduit des mesures observées.</span>
+</footer>
+
+<!-- Resume modal -->
+<div class="modal" id="resume-modal" hidden>
+  <div class="modal-body">
+    <h2 id="rm-h">Reprise</h2>
+    <p id="rm-b">Vous aviez atteint la mission</p>
+    <div class="modal-actions">
+      <button class="btn sec" id="rm-no">Recommencer</button>
+      <button class="btn" id="rm-yes">Reprendre</button>
+    </div>
+  </div>
+</div>
+
+<!-- Finish modal -->
+<div class="modal" id="finish-modal" hidden>
+  <div class="modal-body">
+    <h2 id="fm-h">🎉 Lab terminé !</h2>
+    <p id="fm-b">Vous avez bouclé les 18 missions.</p>
+    <p id="fm-hint" style="font-size:0.82rem;margin:-8px 0 16px">Vous pouvez aussi fermer cet onglet à tout moment.</p>
+    <div class="modal-actions">
+      <button class="btn sec" id="fm-quit">Quitter la simulation</button>
+      <button class="btn" id="fm-restart">Recommencer le lab</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/*ENGINE-START*/
+
+const ENGINE = (function () {
+  'use strict';
+
+  const IP = { kali: '192.168.86.132', tgt: '192.168.86.131', win: '192.168.86.1', dhcp: '192.168.86.254' };
+  const MAC = { tgt: '00:0C:29:97:A3:E2', win: '00:50:56:C0:00:01', dhcp: '00:50:56:EC:A5:43', kali: '00:0C:29:2D:C6:2B' };
+
+  /* ---------- i18n des messages de simulation ---------- */
+  let elang = 'fr';
+  const setLang = function (l) { elang = (l === 'en') ? 'en' : 'fr'; };
+  const getLang = function () { return elang; };
+
+  const SIM = {
+    fr: {
+      outOfScope: 'Simulation : cible hors périmètre. Seuls le réseau du laboratoire 192.168.86.0/24 et la boucle locale 127.0.0.1 sont autorisés.',
+      outOfScopeHost: 'Simulation : cible hors périmètre. Seuls le réseau du laboratoire 192.168.86.0/24 et la boucle locale 127.0.0.1 sont autorisés. (les noms d’hôte ne sont pas résolus dans la simulation).',
+      pingUsage: 'Usage : ping -c 4 <adresse>',
+      pingNoCount: function (ip) { return 'Simulation : sans -c, ping tournerait sans fin. Utilisez par exemple : ping -c 4 ' + ip; },
+      pingMax: 'Simulation : limité à 20 paquets (-c 20 au maximum).',
+      pingOnlyTarget: function (ip) { return 'Simulation : seuls la cible (' + ip + ') et la boucle locale sont modélisées pour ping.'; },
+      optPorts: 'Nmap : l’option -p attend une liste de ports.',
+      optFile: 'Nmap : l’option -oN attend un nom de fichier.',
+      optUnsupported: function (a) { return 'Simulation : l’option ' + a + ' n’est pas prise en charge. Options disponibles : -n -p --top-ports -sV -sn -sS -sT -sA -sU -oN.'; },
+      topRange: '--top-ports doit être compris entre 1 et 65535.',
+      onlyLabNet: 'Simulation : seul le réseau 192.168.86.0/24 est modélisé.',
+      scanOnlyTarget: function (ip) { return 'Simulation : pour les scans de ports, seules la cible (' + ip + ') et la boucle locale (127.0.0.1) sont modélisées.'; },
+      udpNeedsP: 'Simulation : le scan UDP n’est modélisé qu’avec -p (par exemple -p 53,123,5353), car un scan UDP complet dure très longtemps.',
+      udpMaxPorts: 'Simulation : le scan UDP est limité à 1024 ports.',
+      catMissing: 'cat : nom de fichier manquant',
+      bashUnsupported: function (c) { return 'bash: ' + c + ' : commande non prise en charge par la simulation (tapez help)'; },
+      ufwBadPort: function (p, sub) { return 'ERROR: Bad port \'' + p + '\'\nSimulation : syntaxe prise en charge : ufw ' + sub + ' <port>[/tcp|/udp]'; },
+      ufwDeleteSyntax: 'Simulation : syntaxe prise en charge : ufw delete <allow|deny|reject> <port>[/tcp|/udp]',
+      ufwSub: 'Simulation : sous-commande ufw non prise en charge (status, enable, disable, allow, deny, reject, delete).',
+      sysctlActions: 'Simulation : actions prises en charge : stop, start, restart, status.',
+      aptUpdateNoNet: 'Err:1 http://archive.ubuntu.com/ubuntu InRelease\n  Temporary failure resolving \'archive.ubuntu.com\'\nSimulation : activez la carte NAT temporaire dans le panneau de la cible.',
+      aptInstallNoNet: 'Err:1 http://archive.ubuntu.com/ubuntu apache2 2.4.66-2ubuntu2.6\n  Temporary failure resolving \'archive.ubuntu.com\'\nE: Failed to fetch http://archive.ubuntu.com/ubuntu/pool/main/a/apache2/apache2_2.4.66-2ubuntu2.6_amd64.deb\nSimulation : activez la carte NAT temporaire dans le panneau de la cible.',
+      aptOnlyApache: 'Simulation : seul « apt install -y apache2 » est modélisé.',
+      aptInstalled: 'Reading package lists... Done\nBuilding dependency tree... Done\nThe following NEW packages will be installed:\n  apache2\nSetting up apache2 (2.4.66-2ubuntu2.6) ...\nSimulation : sortie abrégée.',
+      aptSub: 'Simulation : sous-commandes apt prises en charge : update, install.',
+      tailNeedFile: 'Simulation : indiquez un fichier, par exemple tail -n 5 /var/log/ufw.log',
+      tailOnlyFiles: 'Simulation : seuls /var/log/ufw.log et /var/log/apache2/access.log sont disponibles.',
+      descListening: function (svc) { return 'À l’écoute : ' + svc + '.'; },
+      descNoService: 'Aucun service réseau n’écoute.',
+      descFwActiveRules: function (rules) { return 'Pare-feu actif : ' + rules + ', tout le reste refusé.'; },
+      descFwActiveNoRule: 'Pare-feu actif sans règle, tout le reste refusé.',
+      descFwInactive: 'Pare-feu inactif.',
+      descNat: 'Carte NAT branchée.',
+      descHostOnly: 'Réseau Host-only seul.',
+      helpKali: [
+        'Commandes prises en charge sur Kali (simulation) :',
+        '  ip addr',
+        '  ping -c N <adresse>',
+        '  nmap --version',
+        '  nmap [-n] [-p <ports> | -p- | --top-ports N] [-sS | -sT | -sA | -sU | -sV | -sn] [-oN fichier] <cible>',
+        '  cat <fichier>',
+        '  clear',
+        '',
+        'Périmètre : 192.168.86.0/24 et 127.0.0.1 uniquement.',
+        'Les scans -sA et -sU demandent sudo. Le scan UDP demande -p.'
+      ].join('\n'),
+      helpCible: [
+        'Commandes prises en charge sur la cible (simulation) :',
+        '  ip addr',
+        '  ss -tln   |   ss -uln',
+        '  sudo ufw status [verbose]   |   sudo ufw enable   |   sudo ufw disable',
+        '  sudo ufw allow|deny|reject <port>[/tcp|/udp]',
+        '  sudo ufw delete allow|deny|reject <port>[/tcp|/udp]',
+        '  sudo systemctl stop|start|restart|status apache2 (ou ssh)',
+        '  sudo apt update   |   sudo apt install -y apache2   (carte NAT requise)',
+        '  sudo tail -n 5 /var/log/ufw.log   |   sudo tail -n 5 /var/log/apache2/access.log',
+        '  clear'
+      ].join('\n')
+    },
+    en: {
+      outOfScope: 'Simulation: target out of scope. Only the lab network 192.168.86.0/24 and the loopback 127.0.0.1 are allowed.',
+      outOfScopeHost: 'Simulation: target out of scope. Only the lab network 192.168.86.0/24 and the loopback 127.0.0.1 are allowed. (hostnames are not resolved in the simulation).',
+      pingUsage: 'Usage: ping -c 4 <address>',
+      pingNoCount: function (ip) { return 'Simulation: without -c, ping would run forever. Use for example: ping -c 4 ' + ip; },
+      pingMax: 'Simulation: limited to 20 packets (-c 20 maximum).',
+      pingOnlyTarget: function (ip) { return 'Simulation: only the target (' + ip + ') and the loopback are modelled for ping.'; },
+      optPorts: 'Nmap: the -p option expects a port list.',
+      optFile: 'Nmap: the -oN option expects a file name.',
+      optUnsupported: function (a) { return 'Simulation: the ' + a + ' option is not supported. Available options: -n -p --top-ports -sV -sn -sS -sT -sA -sU -oN.'; },
+      topRange: '--top-ports must be between 1 and 65535.',
+      onlyLabNet: 'Simulation: only the 192.168.86.0/24 network is modelled.',
+      scanOnlyTarget: function (ip) { return 'Simulation: for port scans, only the target (' + ip + ') and the loopback (127.0.0.1) are modelled.'; },
+      udpNeedsP: 'Simulation: the UDP scan is only modelled with -p (for example -p 53,123,5353), because a full UDP scan takes a very long time.',
+      udpMaxPorts: 'Simulation: the UDP scan is limited to 1024 ports.',
+      catMissing: 'cat: missing file operand',
+      bashUnsupported: function (c) { return 'bash: ' + c + ': command not supported by the simulation (type help)'; },
+      ufwBadPort: function (p, sub) { return 'ERROR: Bad port \'' + p + '\'\nSimulation: supported syntax: ufw ' + sub + ' <port>[/tcp|/udp]'; },
+      ufwDeleteSyntax: 'Simulation: supported syntax: ufw delete <allow|deny|reject> <port>[/tcp|/udp]',
+      ufwSub: 'Simulation: unsupported ufw subcommand (status, enable, disable, allow, deny, reject, delete).',
+      sysctlActions: 'Simulation: supported actions: stop, start, restart, status.',
+      aptUpdateNoNet: 'Err:1 http://archive.ubuntu.com/ubuntu InRelease\n  Temporary failure resolving \'archive.ubuntu.com\'\nSimulation: enable the temporary NAT card in the target panel.',
+      aptInstallNoNet: 'Err:1 http://archive.ubuntu.com/ubuntu apache2 2.4.66-2ubuntu2.6\n  Temporary failure resolving \'archive.ubuntu.com\'\nE: Failed to fetch http://archive.ubuntu.com/ubuntu/pool/main/a/apache2/apache2_2.4.66-2ubuntu2.6_amd64.deb\nSimulation: enable the temporary NAT card in the target panel.',
+      aptOnlyApache: 'Simulation: only "apt install -y apache2" is modelled.',
+      aptInstalled: 'Reading package lists... Done\nBuilding dependency tree... Done\nThe following NEW packages will be installed:\n  apache2\nSetting up apache2 (2.4.66-2ubuntu2.6) ...\nSimulation: output abridged.',
+      aptSub: 'Simulation: supported apt subcommands: update, install.',
+      tailNeedFile: 'Simulation: specify a file, for example tail -n 5 /var/log/ufw.log',
+      tailOnlyFiles: 'Simulation: only /var/log/ufw.log and /var/log/apache2/access.log are available.',
+      descListening: function (svc) { return 'Listening: ' + svc + '.'; },
+      descNoService: 'No network service is listening.',
+      descFwActiveRules: function (rules) { return 'Firewall active: ' + rules + ', everything else denied.'; },
+      descFwActiveNoRule: 'Firewall active with no rule, everything else denied.',
+      descFwInactive: 'Firewall inactive.',
+      descNat: 'NAT card attached.',
+      descHostOnly: 'Host-only network only.',
+      helpKali: [
+        'Supported commands on Kali (simulation):',
+        '  ip addr',
+        '  ping -c N <address>',
+        '  nmap --version',
+        '  nmap [-n] [-p <ports> | -p- | --top-ports N] [-sS | -sT | -sA | -sU | -sV | -sn] [-oN file] <target>',
+        '  cat <file>',
+        '  clear',
+        '',
+        'Scope: 192.168.86.0/24 and 127.0.0.1 only.',
+        'The -sA and -sU scans require sudo. The UDP scan requires -p.'
+      ].join('\n'),
+      helpCible: [
+        'Supported commands on the target (simulation):',
+        '  ip addr',
+        '  ss -tln   |   ss -uln',
+        '  sudo ufw status [verbose]   |   sudo ufw enable   |   sudo ufw disable',
+        '  sudo ufw allow|deny|reject <port>[/tcp|/udp]',
+        '  sudo ufw delete allow|deny|reject <port>[/tcp|/udp]',
+        '  sudo systemctl stop|start|restart|status apache2 (or ssh)',
+        '  sudo apt update   |   sudo apt install -y apache2   (NAT card required)',
+        '  sudo tail -n 5 /var/log/ufw.log   |   sudo tail -n 5 /var/log/apache2/access.log',
+        '  clear'
+      ].join('\n')
+    }
+  };
+
+  /* L(cle, ...args) -> texte dans la langue courante */
+  const L = function (k) {
+    const d = SIM[elang] || SIM.fr;
+    const v = (d[k] !== undefined) ? d[k] : SIM.fr[k];
+    if (typeof v === 'function') return v.apply(null, Array.prototype.slice.call(arguments, 1));
+    return (v === undefined) ? k : v;
+  };
+
+  /* msg(descripteur) -> recalcule un texte deja affiche dans la langue courante */
+  const msg = function (d) {
+    if (!d) return '';
+    const body = L.apply(null, [d.k].concat(d.a || []));
+    if (!d.pre) return body;
+    return d.pre + (body ? '\n' + body : '');
+  };
+
+  /* MR : resultat porteur de son descripteur de message, donc retraduisible */
+  const MR = function (k, a, extra) {
+    const args = a || [];
+    return R(L.apply(null, [k].concat(args)), Object.assign({ msg: { k: k, a: args } }, extra || {}));
+  };
+
+
+  let rnd = Math.random;
+  const setRandom = function (f) { rnd = f; };
+  const jit = function (x, a) { const k = (a === undefined) ? 0.08 : a; return x * (1 - k + rnd() * 2 * k); };
+  const pad = function (s, n) { return String(s).padEnd(n, ' '); };
+  const p2 = function (n) { return String(n).padStart(2, '0'); };
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  function kaliDate() { return new Date(Date.now() - 5 * 3600e3); }
+  function kaliStamp() {
+    const d = kaliDate();
+    return d.getUTCFullYear() + '-' + p2(d.getUTCMonth() + 1) + '-' + p2(d.getUTCDate()) + ' ' + p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + ' -0500';
+  }
+  function kaliLongStamp() {
+    const d = kaliDate();
+    return DAYS[d.getUTCDay()] + ' ' + MONTHS[d.getUTCMonth()] + ' ' + String(d.getUTCDate()).padStart(2, ' ') + ' ' + p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + ':' + p2(d.getUTCSeconds()) + ' ' + d.getUTCFullYear();
+  }
+  function apacheStamp() {
+    const d = new Date();
+    return p2(d.getUTCDate()) + '/' + MONTHS[d.getUTCMonth()] + '/' + d.getUTCFullYear() + ':' + p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + ':' + p2(d.getUTCSeconds()) + ' +0000';
+  }
+  function isoUtc(offsetMs) {
+    const d = new Date(Date.now() + (offsetMs || 0));
+    return d.getUTCFullYear() + '-' + p2(d.getUTCMonth() + 1) + '-' + p2(d.getUTCDate()) + 'T' + p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + ':' + p2(d.getUTCSeconds()) + '.' + String(Math.floor(rnd() * 999999)).padStart(6, '0') + '+00:00';
+  }
+
+  /* ---------- État de la cible ---------- */
+  function newState() {
+    return { ssh: true, apache: false, apacheInstalled: false, https: false, ufw: false, ufwEver: false, nat: false, rules: [], logs: { ufw: [], apache: [] }, files: {} };
+  }
+  function preset(name) {
+    const s = newState();
+    if (name === 'apache' || name === 'final') { s.apache = true; s.apacheInstalled = true; }
+    if (name === 'final') {
+      s.ufw = true; s.ufwEver = true;
+      s.rules = [{ port: 22, proto: 'tcp', action: 'allow' }, { port: 80, proto: 'tcp', action: 'deny' }];
+    }
+    return s;
+  }
+  function replaceState(dst, src) {
+    Object.keys(dst).forEach(function (k) { delete dst[k]; });
+    Object.assign(dst, src);
+  }
+  function setRule(st, port, proto, action) {
+    st.rules = st.rules.filter(function (r) { return !(r.port === port && r.proto === proto); });
+    if (action && action !== 'none') st.rules.push({ port: port, proto: proto, action: action });
+  }
+  function getRule(st, port, proto) {
+    for (const r of st.rules) { if (r.port === port && (r.proto === proto || r.proto === 'any')) return r.action; }
+    return null;
+  }
+  function describe(st) {
+    const parts = [];
+    const svc = [];
+    if (st.ssh) svc.push('SSH (22)');
+    if (st.apache) svc.push('Apache (80)');
+    if (st.https) svc.push('HTTPS (443)');
+    parts.push(svc.length ? L('descListening', svc.join(', ')) : L('descNoService'));
+    if (st.ufw) {
+      const rs = st.rules.map(function (r) { return r.port + '/' + r.proto + ' ' + r.action.toUpperCase(); });
+      parts.push(rs.length ? L('descFwActiveRules', rs.join(', ')) : L('descFwActiveNoRule'));
+    } else {
+      parts.push(L('descFwInactive'));
+    }
+    parts.push(st.nat ? L('descNat') : L('descHostOnly'));
+    return parts.join(' ');
+  }
+
+  /* ---------- États de ports ---------- */
+  function listensTcp(st, p) { return (p === 22 && st.ssh) || (p === 80 && st.apache) || (p === 443 && st.https); }
+  function listensUdp(st, p) { return p === 68; }
+  function tcpState(st, p) {
+    const l = listensTcp(st, p);
+    if (!st.ufw) return l ? 'open' : 'closed';
+    const r = getRule(st, p, 'tcp');
+    if (r === 'allow') return l ? 'open' : 'closed';
+    if (r === 'reject') return 'closed';
+    return 'filtered';
+  }
+  function ackState(st, p) {
+    if (!st.ufw) return 'unfiltered';
+    const r = getRule(st, p, 'tcp');
+    return (r === 'allow' || r === 'reject') ? 'unfiltered' : 'filtered';
+  }
+  function udpState(st, p) {
+    const l = listensUdp(st, p);
+    if (!st.ufw) return l ? 'open|filtered' : 'closed';
+    const r = getRule(st, p, 'udp');
+    if (r === 'allow') return l ? 'open|filtered' : 'closed';
+    if (r === 'reject') return 'closed';
+    return 'open|filtered';
+  }
+
+  /* ---------- Données de référence ---------- */
+  const SVC_TCP = { 21: 'ftp', 22: 'ssh', 23: 'telnet', 25: 'smtp', 53: 'domain', 80: 'http', 110: 'pop3', 111: 'rpcbind', 135: 'msrpc', 139: 'netbios-ssn', 143: 'imap', 443: 'https', 445: 'microsoft-ds', 993: 'imaps', 995: 'pop3s', 1723: 'pptp', 3306: 'mysql', 3389: 'ms-wbt-server', 5900: 'vnc', 8080: 'http-proxy' };
+  const SVC_UDP = { 53: 'domain', 67: 'dhcps', 68: 'dhcpc', 123: 'ntp', 161: 'snmp', 5353: 'zeroconf' };
+  const VER = {
+    22: { svc: 'ssh', ver: 'OpenSSH 10.2p1 Ubuntu 2ubuntu3.5 (Ubuntu Linux; protocol 2.0)' },
+    80: { svc: 'http', ver: 'Apache httpd 2.4.66 ((Ubuntu))' },
+    443: { svc: 'ssl/http', ver: 'Apache httpd 2.4.66 ((Ubuntu))' }
+  };
+  const TOP100 = [80, 23, 443, 21, 22, 25, 3389, 110, 445, 139, 143, 53, 135, 3306, 8080, 1723, 111, 995, 993, 5900, 1025, 587, 8888, 199, 1720, 465, 548, 113, 81, 6001, 10000, 514, 5060, 179, 1026, 2000, 8443, 8000, 32768, 554, 26, 1433, 49152, 2001, 515, 8008, 49154, 1027, 5666, 646, 5000, 5631, 631, 49153, 8081, 2049, 88, 79, 5800, 106, 2121, 1110, 49155, 6000, 513, 990, 5357, 427, 49156, 543, 544, 5101, 144, 7, 389, 8009, 3128, 444, 9999, 5009, 7070, 5190, 3000, 5432, 1900, 3986, 13, 1029, 9, 5051, 6646, 49157, 1028, 873, 1755, 2717, 4899, 9100, 119, 37];
+
+  function topPorts(n) {
+    const out = []; const seen = new Set();
+    for (const p of TOP100) { if (out.length >= n) break; out.push(p); seen.add(p); }
+    for (let p = 1; out.length < n && p <= 65535; p++) { if (!seen.has(p)) { out.push(p); seen.add(p); } }
+    return out;
+  }
+  function parsePorts(spec) {
+    if (spec === '-') { const all = []; for (let i = 1; i <= 65535; i++) all.push(i); return all; }
+    if (!spec) return null;
+    const set = new Set();
+    for (const part of spec.split(',')) {
+      const m = /^(\d+)(?:-(\d+))?$/.exec(part);
+      if (!m) return null;
+      const a = parseInt(m[1], 10); const b = m[2] ? parseInt(m[2], 10) : a;
+      if (a < 1 || b > 65535 || a > b) return null;
+      for (let i = a; i <= b; i++) set.add(i);
+    }
+    return Array.from(set).sort(function (x, y) { return x - y; });
+  }
+
+  /* ---------- Étiquetage observé / déduit / extrapolé ---------- */
+  const norm = function (line) { return line.trim().replace(/\s+/g, ' ').replace(/^sudo /, ''); };
+  const T = '192.168.86.131';
+  const OBS_KALI = {
+    any: ['nmap --version', 'nmap 127.0.0.1', 'ip addr', 'ping -c 4 ' + T],
+    initial: ['nmap ' + T, 'nmap --top-ports 100 ' + T, 'nmap -p 22,80,443 ' + T, 'nmap -n -p 22,80,443 ' + T, 'nmap -n -p- ' + T, 'nmap -n -sV -p 22 ' + T, 'nmap -sn 192.168.86.0/24', 'nmap -n -sS -p 22,80,443 ' + T, 'nmap -n -oN rapport_nmap.txt ' + T, 'cat rapport_nmap.txt'],
+    apache: ['nmap -n -p 22,80,443 ' + T, 'nmap -n -sV -p 22,80 ' + T, 'nmap -n -sU -p 53,123,5353 ' + T],
+    final: ['nmap -n -p 22,80,443 ' + T, 'nmap -n -sA -p 22,80,443 ' + T, 'nmap -n -sU -p 53,123,5353 ' + T]
+  };
+  const OBS_CIBLE = {
+    any: ['ip addr'],
+    initial: ['ss -tln', 'ss -uln', 'ufw status', 'ufw allow 22/tcp', 'ufw deny 80/tcp', 'ufw enable'],
+    apache: ['ss -tln', 'ss -uln', 'ufw status', 'ufw allow 22/tcp', 'ufw deny 80/tcp', 'ufw enable', 'apt install -y apache2', 'tail -n 5 /var/log/apache2/access.log'],
+    final: ['ss -tln', 'ufw status', 'ufw status verbose', 'tail -n 5 /var/log/ufw.log']
+  };
+  function stateKey(st) {
+    if (!st.ssh || st.https) return null;
+    if (!st.ufw) return st.apache ? 'apache' : 'initial';
+    const has = function (p, a) { return st.rules.some(function (r) { return r.port === p && r.proto === 'tcp' && r.action === a; }); };
+    if (st.apache && st.rules.length === 2 && has(22, 'allow') && has(80, 'deny')) return 'final';
+    return null;
+  }
+  function classify(st, side, line, reasons) {
+    if (reasons.length) return 'extrapolated';
+    const table = side === 'kali' ? OBS_KALI : OBS_CIBLE;
+    const c = norm(line);
+    if (table.any.indexOf(c) >= 0) return 'observed';
+    const k = stateKey(st);
+    if (k && table[k].indexOf(c) >= 0) return 'observed';
+    return 'deduced';
+  }
+
+  /* ---------- Résultats ---------- */
+  function R(text, extra) {
+    const r = { text: text, kind: 'out', tag: null, reasons: [], packets: null, taggable: false };
+    return Object.assign(r, extra || {});
+  }
+  function E(text) { return R(text, { kind: 'err' }); }
+
+  /* ---------- Latence et durée ---------- */
+  function latency(big) { const l = jit(big ? 0.0009 : 0.0006, 0.6); return l < 0.001 ? l.toFixed(5) : l.toFixed(4); }
+
+  /* ---------- Kali : ip addr, ping, nmap, cat ---------- */
+  const KALI_IP_ADDR = [
+    '1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000',
+    '    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00',
+    '    inet 127.0.0.1/8 scope host lo',
+    '       valid_lft forever preferred_lft forever',
+    '    inet6 ::1/128 scope host noprefixroute',
+    '       valid_lft forever preferred_lft forever',
+    '2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000',
+    '    link/ether 00:0c:29:2d:c6:2b brd ff:ff:ff:ff:ff:ff',
+    '    inet 192.168.86.132/24 brd 192.168.86.255 scope global dynamic noprefixroute eth0',
+    '       valid_lft 1627sec preferred_lft 1627sec',
+    '    inet6 fe80::20c:29ff:fe2d:c62b/64 scope link noprefixroute',
+    '       valid_lft forever preferred_lft forever'
+  ].join('\n');
+
+  const VERSION_TXT = [
+    'Nmap version 7.99 ( https://nmap.org )',
+    'Platform: x86_64-pc-linux-gnu',
+    'Compiled with: liblua-5.4.8 openssl-3.6.3 libssh2-1.11.1 libz-1.3.1 libpcre2-10.46 libpcap-1.10.6 nmap-libdnet-1.18.0 ipv6',
+    'Compiled without:',
+    'Available nsock engines: epoll poll select'
+  ].join('\n');
+
+  function inLab(ip) { return /^192\.168\.86\.\d{1,3}$/.test(ip) && ip.split('.').every(function (x) { return parseInt(x, 10) <= 255; }); }
+  function validIp(ip) { return /^\d{1,3}(\.\d{1,3}){3}$/.test(ip) && ip.split('.').every(function (x) { return parseInt(x, 10) <= 255; }); }
+
+  function cmdPing(st, args) {
+    let count = null; let host = null;
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a === '-c') { count = parseInt(args[++i], 10); }
+      else if (/^-c\d+$/.test(a)) { count = parseInt(a.slice(2), 10); }
+      else if (a.charAt(0) !== '-') { host = a; }
+    }
+    if (!host) return MR('pingUsage', [], { kind: 'err' });
+    if (!(count > 0)) return MR('pingNoCount', [IP.tgt], { kind: 'err' });
+    if (count > 20) return MR('pingMax', [], { kind: 'err' });
+    const isLo = (host === '127.0.0.1' || host === 'localhost');
+    if (!isLo && !(validIp(host) && inLab(host))) return MR('outOfScope', [], { kind: 'err' });
+    if (!isLo && host !== IP.tgt) return MR('pingOnlyTarget', [IP.tgt], { kind: 'err' });
+    const times = [];
+    for (let i = 0; i < count; i++) {
+      let t;
+      if (isLo) t = jit(0.04, 0.5);
+      else if (i === 0) t = jit(13, 0.15);
+      else t = (rnd() < 0.25) ? jit(10, 0.15) : jit(1.3, 0.12);
+      times.push(t);
+    }
+    const lines = ['PING ' + (isLo ? '127.0.0.1' : host) + ' (' + (isLo ? '127.0.0.1' : host) + ') 56(84) bytes of data.'];
+    times.forEach(function (t, i) {
+      lines.push('64 bytes from ' + (isLo ? '127.0.0.1' : host) + ': icmp_seq=' + (i + 1) + ' ttl=64 time=' + (isLo ? t.toFixed(3) : t.toFixed(t < 10 ? 2 : 1)) + ' ms');
+    });
+    const mn = Math.min.apply(null, times); const mx = Math.max.apply(null, times);
+    const avg = times.reduce(function (a, b) { return a + b; }, 0) / count;
+    const mdev = Math.sqrt(times.reduce(function (a, b) { return a + (b - avg) * (b - avg); }, 0) / count);
+    lines.push('', '--- ' + (isLo ? '127.0.0.1' : host) + ' ping statistics ---');
+    lines.push(count + ' packets transmitted, ' + count + ' received, 0% packet loss, time ' + ((count - 1) * 1000 + Math.round(rnd() * 12)) + 'ms');
+    lines.push('rtt min/avg/max/mdev = ' + mn.toFixed(3) + '/' + avg.toFixed(3) + '/' + mx.toFixed(3) + '/' + mdev.toFixed(3) + ' ms');
+    const reasons = [];
+    if (!isLo && st.ufw) reasons.push('ping vers une cible dont le pare-feu est actif (ufw laisse normalement passer l’écho ICMP, non testé dans le lab)');
+    return R(lines.join('\n'), { taggable: true, reasons: reasons });
+  }
+
+  function parseNmapArgs(args) {
+    const o = { n: false, sV: false, type: null, pspec: null, top: null, oN: null, target: null, version: false };
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a === '-n') o.n = true;
+      else if (a === '-sV') o.sV = true;
+      else if (a === '-sn' || a === '-sS' || a === '-sT' || a === '-sA' || a === '-sU') o.type = a.slice(1);
+      else if (a === '-p') { o.pspec = args[++i]; if (o.pspec === undefined) return { errorKey: 'optPorts' }; }
+      else if (a === '--top-ports') { o.top = parseInt(args[++i], 10); }
+      else if (a.indexOf('--top-ports=') === 0) { o.top = parseInt(a.slice(12), 10); }
+      else if (a === '-oN') { o.oN = args[++i]; if (!o.oN) return { errorKey: 'optFile' }; }
+      else if (a === '--version' || a === '-V') o.version = true;
+      else if (a.indexOf('-p') === 0 && a.length > 2) o.pspec = a.slice(2);
+      else if (a.charAt(0) === '-') return { errorKey: 'optUnsupported', errorArgs: [a] };
+      else o.target = a;
+    }
+    if (o.top !== null && !(o.top > 0 && o.top <= 65535)) return { errorKey: 'topRange' };
+    return o;
+  }
+
+  function fmtTable(rows, withVer) {
+    const head = ['PORT', 'STATE', 'SERVICE'];
+    if (withVer) head.push('VERSION');
+    const cols = withVer ? 4 : 3;
+    const w = [];
+    for (let c = 0; c < cols; c++) {
+      let m = head[c].length;
+      rows.forEach(function (r) { m = Math.max(m, String(r[c]).length); });
+      w.push(m + 1);
+    }
+    const line = function (r) {
+      let s = '';
+      for (let c = 0; c < cols; c++) s += (c === cols - 1) ? String(r[c]) : pad(r[c], w[c]);
+      return s;
+    };
+    return [line(head)].concat(rows.map(line));
+  }
+
+  function nmap(st, args, sudo, raw) {
+    const o = parseNmapArgs(args);
+    if (o.errorKey) return MR(o.errorKey, o.errorArgs || [], { kind: 'err' });
+    if (o.version) return R(VERSION_TXT, { taggable: true });
+    if (!o.target) return E('WARNING: No targets were specified, so 0 hosts scanned.\nNmap done: 0 IP addresses (0 hosts up) scanned in 0.03 seconds');
+
+    const reasons = [];
+    const pre = sudo ? '[sudo] password for kali:\n' : '';
+    let host = null; let cidr = false;
+
+    if (o.target === 'localhost' || o.target === '127.0.0.1') host = 'lo';
+    else if (o.target.indexOf('/') >= 0) {
+      const m = /^(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})$/.exec(o.target);
+      if (!m || !validIp(m[1])) return E('Failed to resolve "' + o.target + '".');
+      if (m[1] === '192.168.86.0' && m[2] === '24') cidr = true;
+      else if (inLab(m[1])) return MR('onlyLabNet', [], { kind: 'err' });
+      else return MR('outOfScope', [], { kind: 'err' });
+    } else if (validIp(o.target)) {
+      if (!inLab(o.target)) return MR('outOfScope', [], { kind: 'err' });
+      host = o.target;
+    } else {
+      return MR('outOfScopeHost', [], { kind: 'err' });
+    }
+
+    const type = o.type || 'sS';
+    const started = kaliStamp();
+    const lines = [];
+    const hdr = 'Starting Nmap 7.99 ( https://nmap.org ) at ' + started;
+
+    /* Découverte d'hôtes */
+    if (type === 'sn') {
+      let dur; const reportLines = [];
+      const hosts = [
+        { ip: IP.win, mac: MAC.win, l: latency(true) },
+        { ip: IP.tgt, mac: MAC.tgt, l: latency(true) },
+        { ip: IP.dhcp, mac: MAC.dhcp, l: jit(0.0002, 0.4).toFixed(5) },
+        { ip: IP.kali, mac: null, l: null }
+      ];
+      let up = 0;
+      if (cidr) {
+        hosts.forEach(function (h) {
+          reportLines.push('Nmap scan report for ' + h.ip);
+          reportLines.push(h.l ? 'Host is up (' + h.l + 's latency).' : 'Host is up.');
+          if (h.mac) reportLines.push('MAC Address: ' + h.mac + ' (VMware)');
+          up++;
+        });
+        dur = o.n ? jit(2.0, 0.15) : jit(10.9, 0.04);
+        if (o.n) reasons.push('-sn avec -n (durée jamais mesurée dans le lab)');
+        reportLines.push('Nmap done: 256 IP addresses (' + up + ' hosts up) scanned in ' + dur.toFixed(2) + ' seconds');
+      } else if (host === 'lo') {
+        reportLines.push('Nmap scan report for localhost (127.0.0.1)', 'Host is up.');
+        dur = 0.03; reportLines.push('Nmap done: 1 IP address (1 host up) scanned in ' + dur.toFixed(2) + ' seconds');
+      } else {
+        const h = hosts.filter(function (x) { return x.ip === host; })[0];
+        if (h) {
+          reportLines.push('Nmap scan report for ' + h.ip, h.l ? 'Host is up (' + h.l + 's latency).' : 'Host is up.');
+          if (h.mac) reportLines.push('MAC Address: ' + h.mac + ' (VMware)');
+          dur = jit(0.2, 0.2); reportLines.push('Nmap done: 1 IP address (1 host up) scanned in ' + dur.toFixed(2) + ' seconds');
+        } else {
+          dur = jit(0.45, 0.2);
+          reportLines.push('Note: Host seems down. If it is really up, but blocking our ping probes, try -Pn');
+          reportLines.push('Nmap done: 1 IP address (0 hosts up) scanned in ' + dur.toFixed(2) + ' seconds');
+        }
+      }
+      const text = pre + hdr + '\n' + reportLines.join('\n');
+      const pk = arpPackets(cidr ? hosts : hosts.filter(function (x) { return x.ip === host; }), cidr);
+      return R(text, { taggable: true, reasons: reasons, packets: { title: 'nmap ' + args.join(' '), rows: pk } });
+    }
+
+    /* Scans de ports */
+    if (host !== 'lo' && host !== IP.tgt) return MR('scanOnlyTarget', [IP.tgt], { kind: 'err' });
+    if ((type === 'sA' || type === 'sU') && !sudo) return E('You requested a scan type which requires root privileges.\nQUITTING!');
+
+    let ports;
+    if (o.pspec !== null) {
+      ports = parsePorts(o.pspec);
+      if (!ports) return E('Your port specification is invalid.\nQUITTING!');
+    } else if (type === 'sU') {
+      return MR('udpNeedsP', [], { kind: 'err' });
+    } else if (o.top) {
+      ports = topPorts(o.top);
+    } else {
+      ports = topPorts(1000);
+    }
+    if (type === 'sU' && ports.length > 1024) return MR('udpMaxPorts', [], { kind: 'err' });
+
+    const proto = (type === 'sU') ? 'udp' : 'tcp';
+    const fn = (type === 'sA') ? ackState : (type === 'sU') ? udpState : tcpState;
+    const states = ports.map(function (p) { return { p: p, s: (host === 'lo') ? 'closed' : fn(st, p) }; });
+
+    const counts = {}; states.forEach(function (x) { counts[x.s] = (counts[x.s] || 0) + 1; });
+    const nOpen = counts.open || 0;
+    const nSilent = (counts.filtered || 0) + (counts['open|filtered'] || 0);
+
+    /* Extrapolations */
+    if (host !== 'lo') {
+      if (type === 'sT') reasons.push('-sT : échange de paquets reconstitué (le lab n’a pas observé ce scan)');
+      if (type === 'sA' && !st.ufw) reasons.push('scan ACK sans pare-feu (le lab ne l’a testé qu’avec ufw actif)');
+      const hasReject = states.some(function (x) { return st.ufw && getRule(st, x.p, proto) === 'reject'; });
+      if (hasReject) reasons.push('règle REJECT (jamais testée dans le lab : la cible renverrait un RST ou une erreur ICMP)');
+      if (st.https && states.some(function (x) { return x.p === 443 && x.s === 'open'; })) reasons.push('HTTPS en écoute (le port 443 n’a jamais été ouvert dans le lab)');
+      if (type === 'sU') {
+        if (states.some(function (x) { return x.p === 68; })) reasons.push('port UDP 68 (client DHCP) : jamais scanné dans le lab');
+        if (states.some(function (x) { return x.p !== 68 && getRule(st, x.p, 'udp') === 'allow'; })) reasons.push('règle UDP ALLOW (non testée)');
+        if (ports.length > 6 && (counts.closed || 0) > 6) reasons.push('limitation de débit des erreurs ICMP par le noyau, non modélisée');
+        if (ports.length > 10) reasons.push('durée UDP extrapolée (le lab a mesuré 3 ports)');
+      } else if (nSilent > 3) {
+        reasons.push('durée extrapolée : le lab n’a mesuré que 2 ports filtrés');
+      }
+    }
+
+    /* Durée */
+    let dur;
+    if (host === 'lo') dur = 0.14 + ports.length * 0.00003;
+    else if (type === 'sU') dur = nSilent > 0 ? 0.28 + 1.15 + ports.length * 0.01 : 0.15 + ports.length * 0.027;
+    else dur = 0.15 + ports.length * 0.00015 + (nSilent > 0 ? 1.15 + nSilent * 0.02 : 0) + (type === 'sT' ? 0.05 : 0);
+    if (!o.n && host !== 'lo') dur += 4.55 + rnd() * 0.2;
+    const doVer = o.sV && type !== 'sU';
+    if (doVer) states.forEach(function (x) { if (x.s === 'open') dur += (x.p === 22 ? 0.75 : 5.9); });
+    dur = jit(dur, 0.05);
+
+    /* Rapport */
+    const out = [];
+    const target = (host === 'lo') ? 'localhost (127.0.0.1)' : host;
+    out.push('Nmap scan report for ' + target);
+    out.push('Host is up (' + (host === 'lo' ? '0.000012' : latency(false)) + 's latency).');
+
+    let ignored = null;
+    const sorted = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; });
+    if (sorted.length && counts[sorted[0]] > 25 && sorted[0] !== 'open') ignored = sorted[0];
+
+    const reasonOf = function (s) {
+      if (type === 'sU') return s === 'closed' ? 'port-unreach' : 'no-response';
+      if (type === 'sA') return s === 'unfiltered' ? 'reset' : 'no-response';
+      if (s === 'closed') return (type === 'sT') ? 'conn-refused' : 'reset';
+      return 'no-response';
+    };
+    const shown = states.filter(function (x) { return x.s !== ignored; });
+    const notShown = ignored ? 'Not shown: ' + counts[ignored] + ' ' + ignored + ' ' + proto + ' port' + (counts[ignored] > 1 ? 's' : '') + ' (' + reasonOf(ignored) + ')' : null;
+
+    const rows = shown.map(function (x) {
+      const names = (proto === 'udp') ? SVC_UDP : SVC_TCP;
+      const row = [x.p + '/' + proto, x.s, names[x.p] || 'unknown'];
+      if (doVer) {
+        const v = (x.s === 'open') ? VER[x.p] : null;
+        if (v) { row[2] = v.svc; row.push(v.ver); } else row.push('');
+      }
+      return row;
+    });
+    const anyVer = doVer && rows.some(function (r) { return r[3]; });
+
+    if (!rows.length) {
+      out.push('All ' + ports.length + ' scanned ports on ' + target + ' are in ignored states.');
+      out.push(notShown);
+    } else {
+      if (notShown) out.push(notShown); else out.push('');
+      fmtTable(rows, anyVer).forEach(function (l) { out.push(l.replace(/\s+$/, '')); });
+    }
+    if (host === IP.tgt) out.push('MAC Address: ' + MAC.tgt + ' (VMware)');
+    if (anyVer) out.push('Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel');
+
+    const bodyForFile = out.slice();
+    const tail = [];
+    if (doVer) { tail.push('', 'Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .'); }
+    else tail.push('');
+    tail.push('Nmap done: 1 IP address (1 host up) scanned in ' + dur.toFixed(2) + ' seconds');
+
+    /* Fichier -oN */
+    if (o.oN) {
+      st.files[o.oN] = [
+        '# Nmap 7.99 scan initiated ' + kaliLongStamp() + ' as: /usr/lib/nmap/nmap --privileged ' + args.join(' '),
+        bodyForFile.join('\n'),
+        '',
+        '# Nmap done at ' + kaliLongStamp() + ' -- 1 IP address (1 host up) scanned in ' + dur.toFixed(2) + ' seconds'
+      ].join('\n');
+    }
+
+    /* Effets de bord côté cible */
+    if (host === IP.tgt) {
+      if (st.ufw) {
+        let n = 0;
+        states.forEach(function (x) {
+          if (n >= 30) return;
+          if (x.s === 'filtered' || x.s === 'open|filtered' || (getRule(st, x.p, proto) === 'reject')) {
+            n++;
+            const sp = 40000 + Math.floor(rnd() * 20000);
+            for (let k = 0; k < 2; k++) {
+              st.logs.ufw.push(ufwLine(proto, type, sp + k * 2, x.p, k * 1000));
+            }
+          }
+        });
+        if (st.logs.ufw.length > 300) st.logs.ufw = st.logs.ufw.slice(-300);
+      }
+      if (doVer && states.some(function (x) { return x.p === 80 && x.s === 'open'; })) {
+        const ts = apacheStamp();
+        const ua = '"Mozilla/5.0 (compatible; Nmap Scripting Engine; https://nmap.org/book/nse.html)"';
+        st.logs.apache.push(IP.kali + ' - - [' + ts + '] "GET /nmaplowercheck' + Math.floor(1.79e9 + rnd() * 1e6) + ' HTTP/1.1" 404 496 "-" ' + ua);
+        st.logs.apache.push(IP.kali + ' - - [' + ts + '] "GET /HNAP1 HTTP/1.1" 404 496 "-" ' + ua);
+        st.logs.apache.push(IP.kali + ' - - [' + ts + '] "GET /evox/about HTTP/1.1" 404 496 "-" ' + ua);
+        st.logs.apache.push(IP.kali + ' - - [' + ts + '] "GET / HTTP/1.0" 200 10946 "-" "-"');
+        st.logs.apache.push(IP.kali + ' - - [' + ts + '] "GET / HTTP/1.1" 200 10927 "-" "-"');
+        if (st.logs.apache.length > 300) st.logs.apache = st.logs.apache.slice(-300);
+      }
+    }
+
+    const packets = (host === 'lo') ? null : { title: 'nmap ' + args.join(' '), rows: scanPackets(states, type, doVer) };
+    const text = pre + hdr + '\n' + out.join('\n') + '\n' + tail.join('\n');
+    return R(text, { taggable: true, reasons: reasons, packets: packets });
+  }
+
+  function ufwLine(proto, type, sp, dp, offMs) {
+    const base = isoUtc(offMs) + ' cible-lab kernel: [UFW BLOCK] IN=ens33 OUT= MAC=00:0c:29:97:a3:e2:00:0c:29:2d:c6:2b:08:00 SRC=' + IP.kali + ' DST=' + IP.tgt;
+    const ttl = 40 + Math.floor(rnd() * 20); const id = Math.floor(rnd() * 60000);
+    if (proto === 'udp') return base + ' LEN=28 TOS=0x00 PREC=0x00 TTL=' + ttl + ' ID=' + id + ' PROTO=UDP SPT=' + sp + ' DPT=' + dp + ' LEN=8';
+    return base + ' LEN=44 TOS=0x00 PREC=0x00 TTL=' + ttl + ' ID=' + id + ' PROTO=TCP SPT=' + sp + ' DPT=' + dp + ' WINDOW=1024 RES=0x00 ' + (type === 'sA' ? 'ACK' : 'SYN') + ' URGP=0';
+  }
+
+  /* ---------- Paquets ---------- */
+  function scanPackets(states, type, doVer) {
+    const rows = []; let t = 0;
+    const sp1 = 40000 + Math.floor(rnd() * 20000); const sp2 = sp1 + 2;
+    const add = function (src, dst, proto, info, kind, dt) {
+      t += (dt === undefined) ? jit(0.0004, 0.5) : dt;
+      rows.push({ t: t, src: src, dst: dst, proto: proto, info: info, kind: kind });
+    };
+    const K = IP.kali; const G = IP.tgt;
+    const LIMIT = 12;
+    const detailed = states.slice(0, LIMIT); const rest = states.slice(LIMIT);
+    const silent = [];
+    detailed.forEach(function (x) {
+      const p = x.p;
+      if (type === 'sS' || type === 'sT') {
+        add(K, G, 'TCP', sp1 + ' → ' + p + ' [SYN] Seq=0 Win=1024 Len=0 MSS=1460', 'syn', 0.0006);
+        if (x.s === 'open') {
+          add(G, K, 'TCP', p + ' → ' + sp1 + ' [SYN, ACK] Seq=0 Ack=1 Win=64240 Len=0 MSS=1460', 'synack', 0.0002);
+          if (type === 'sT') {
+            add(K, G, 'TCP', sp1 + ' → ' + p + ' [ACK] Seq=1 Ack=1 Win=64240 Len=0', 'ack', 0.0002);
+            add(K, G, 'TCP', sp1 + ' → ' + p + ' [RST, ACK] Seq=1 Ack=1 Win=64240 Len=0', 'rst', 0.0004);
+          } else {
+            add(K, G, 'TCP', sp1 + ' → ' + p + ' [RST] Seq=1 Win=0 Len=0', 'rst', 0.0021);
+          }
+        } else if (x.s === 'closed') {
+          add(G, K, 'TCP', p + ' → ' + sp1 + ' [RST, ACK] Seq=1 Ack=1 Win=0 Len=0', 'rst', 0.0002);
+        } else silent.push(x);
+      } else if (type === 'sA') {
+        add(K, G, 'TCP', sp1 + ' → ' + p + ' [ACK] Seq=1 Ack=1 Win=1024 Len=0', 'ack', 0.0006);
+        if (x.s === 'unfiltered') add(G, K, 'TCP', p + ' → ' + sp1 + ' [RST] Seq=1 Win=0 Len=0', 'rst', 0.0002);
+        else silent.push(x);
+      } else if (type === 'sU') {
+        add(K, G, 'UDP', sp1 + ' → ' + p + ' Len=0', 'udp', 0.0006);
+        if (x.s === 'closed') add(G, K, 'ICMP', 'Destination unreachable (Port unreachable)', 'icmp', 0.0003);
+        else silent.push(x);
+      }
+    });
+    silent.forEach(function (x, i) {
+      const p = x.p;
+      if (type === 'sS' || type === 'sT') add(K, G, 'TCP', sp2 + ' → ' + p + ' [SYN] Seq=0 Win=1024 Len=0 MSS=1460', 'syn', i === 0 ? 1.1 : 0.0006);
+      else if (type === 'sA') add(K, G, 'TCP', sp2 + ' → ' + p + ' [ACK] Seq=1 Ack=1 Win=1024 Len=0', 'ack', i === 0 ? 1.1 : 0.0006);
+      else add(K, G, 'UDP', sp2 + ' → ' + p + ' Len=0', 'udp', i === 0 ? 1.1 : 0.0006);
+    });
+    if (silent.length) rows.push({ t: null, kind: 'silence', info: 'Aucune réponse du port ' + silent.map(function (x) { return x.p; }).join(', ') + ' après la retransmission : état conclu ' + (type === 'sU' ? 'open|filtered' : 'filtered') + '.' });
+    if (rest.length) {
+      const c = {}; rest.forEach(function (x) { c[x.s] = (c[x.s] || 0) + 1; });
+      rows.push({ t: null, kind: 'summary', info: '… ' + rest.length + ' autres sondes non détaillées (' + Object.keys(c).map(function (k) { return c[k] + ' ' + k; }).join(', ') + ').' });
+    }
+    if (doVer) {
+      states.forEach(function (x) {
+        if (x.s !== 'open') return;
+        const p = x.p; const sp = sp1 + 10;
+        add(K, G, 'TCP', sp + ' → ' + p + ' [SYN] Seq=0 Win=64240 Len=0 MSS=1460', 'syn', 0.02);
+        add(G, K, 'TCP', p + ' → ' + sp + ' [SYN, ACK] Seq=0 Ack=1 Win=65160 Len=0 MSS=1460', 'synack', 0.0003);
+        add(K, G, 'TCP', sp + ' → ' + p + ' [ACK] Seq=1 Ack=1 Win=64256 Len=0', 'ack', 0.0002);
+        if (p === 22) {
+          add(G, K, 'SSHv2', 'Server: Protocol (SSH-2.0-OpenSSH_10.2p1 Ubuntu-2ubuntu3.5), reconstitué', 'app', 0.002);
+        } else {
+          [['GET /nmaplowercheck HTTP/1.1', 'HTTP/1.1 404 Not Found'], ['GET /HNAP1 HTTP/1.1', 'HTTP/1.1 404 Not Found'], ['GET /evox/about HTTP/1.1', 'HTTP/1.1 404 Not Found'], ['GET / HTTP/1.0', 'HTTP/1.1 200 OK (text/html)'], ['GET / HTTP/1.1', 'HTTP/1.1 200 OK (text/html)']].forEach(function (pair) {
+            add(K, G, 'HTTP', pair[0] + ', reconstitué', 'app', 0.01);
+            add(G, K, 'HTTP', pair[1], 'app', 0.001);
+          });
+        }
+      });
+    }
+    return rows;
+  }
+  function arpPackets(hosts, cidr) {
+    const rows = []; let t = 0;
+    const add = function (src, dst, info, dt) { t += dt; rows.push({ t: t, src: src, dst: dst, proto: 'ARP', info: info, kind: 'arp' }); };
+    hosts.forEach(function (h) {
+      if (!h.mac) return;
+      add(MAC.kali.toLowerCase(), 'Broadcast', 'Who has ' + h.ip + '? Tell ' + IP.kali, 0.004);
+      add(h.mac.toLowerCase(), MAC.kali.toLowerCase(), h.ip + ' is at ' + h.mac.toLowerCase(), 0.0008);
+    });
+    if (cidr) rows.push({ t: null, kind: 'summary', info: '… les autres requêtes ARP (adresses inutilisées) restent sans réponse. Kali (.132) est l’hôte qui scanne : il se déclare actif sans ARP.' });
+    return rows;
+  }
+
+  function cmdCat(st, args) {
+    if (!args.length) return MR('catMissing', [], { kind: 'err' });
+    const f = args[0];
+    if (st.files[f] !== undefined) return R(st.files[f], { taggable: true });
+    return E('cat: ' + f + ': No such file or directory');
+  }
+
+  /* ---------- Exécution côté Kali ---------- */
+  function execKali(st, line) {
+    const raw = line.trim();
+    if (!raw) return R('');
+    const toks = raw.split(/\s+/);
+    let sudo = false;
+    if (toks[0] === 'sudo') { sudo = true; toks.shift(); }
+    const cmd = toks[0]; const args = toks.slice(1);
+    let res;
+    if (cmd === 'help') res = MR('helpKali');
+    else if (cmd === 'ip' && (args[0] === 'addr' || args[0] === 'a')) res = R((sudo ? '[sudo] password for kali:\n' : '') + KALI_IP_ADDR, { taggable: true });
+    else if (cmd === 'ping') res = cmdPing(st, args);
+    else if (cmd === 'nmap') res = nmap(st, args, sudo, raw);
+    else if (cmd === 'cat') res = cmdCat(st, args);
+    else if (cmd === 'whoami') res = R('kali');
+    else if (cmd === 'hostname') res = R('labkali');
+    else res = MR('bashUnsupported', [cmd], { kind: 'err' });
+    if (res.taggable) res.tag = classify(st, 'kali', raw, res.reasons);
+    return res;
+  }
+
+  /* ---------- Côté cible ---------- */
+  function ssTable(rows) {
+    const w = [8, 8, 8, 30];
+    const line = function (r) { return pad(r[0], w[0]) + pad(r[1], w[1]) + pad(r[2], w[2]) + pad(r[3], w[3]) + r[4]; };
+    return [line(['State', 'Recv-Q', 'Send-Q', 'Local Address:Port', 'Peer Address:Port'])].concat(rows.map(line)).join('\n');
+  }
+  function ufwStatus(st, verbose) {
+    if (!st.ufw) return 'Status: inactive';
+    const L = [];
+    L.push('Status: active');
+    if (verbose) { L.push('Logging: on (low)', 'Default: deny (incoming), allow (outgoing), disabled (routed)', 'New profiles: skip'); }
+    L.push('', pad('To', 27) + pad('Action', 12) + 'From', pad('--', 27) + pad('------', 12) + '----');
+    const act = function (a) { const base = a.toUpperCase(); return verbose ? (a === 'reject' ? 'REJECT IN' : base + ' IN') : base; };
+    const name = function (r) { return r.proto === 'any' ? String(r.port) : r.port + '/' + r.proto; };
+    st.rules.forEach(function (r) { L.push(pad(name(r), 27) + pad(act(r.action), 12) + 'Anywhere'); });
+    st.rules.forEach(function (r) { L.push(pad(name(r) + ' (v6)', 27) + pad(act(r.action), 12) + 'Anywhere (v6)'); });
+    return L.join('\n');
+  }
+  function parseRuleArg(s) {
+    const m = /^(\d{1,5})(?:\/(tcp|udp))?$/.exec(s || '');
+    if (!m) return null;
+    const p = parseInt(m[1], 10);
+    if (p < 1 || p > 65535) return null;
+    return { port: p, proto: m[2] || 'any' };
+  }
+  function cmdUfw(st, args, sudo) {
+    if (!sudo) return E('ERROR: You need to be root to run this script');
+    const sub = args[0];
+    if (sub === 'status') return R(ufwStatus(st, args[1] === 'verbose'), { taggable: true });
+    if (sub === 'enable') { st.ufw = true; st.ufwEver = true; return R('Firewall is active and enabled on system startup', { taggable: true }); }
+    if (sub === 'disable') { st.ufw = false; return R('Firewall stopped and disabled on system startup', { taggable: true }); }
+    if (sub === 'allow' || sub === 'deny' || sub === 'reject') {
+      const r = parseRuleArg(args[1]);
+      if (!r) return MR('ufwBadPort', [args[1] || '', sub], { kind: 'err' });
+      const ex = st.rules.filter(function (x) { return x.port === r.port && x.proto === r.proto; })[0];
+      if (ex && ex.action === sub) return R('Skipping adding existing rule\nSkipping adding existing rule (v6)', { taggable: true });
+      const word = st.ufw ? (ex ? 'Rule updated' : 'Rule added') : 'Rules updated';
+      if (ex) ex.action = sub; else st.rules.push({ port: r.port, proto: r.proto, action: sub });
+      return R(word + '\n' + word + ' (v6)', { taggable: true });
+    }
+    if (sub === 'delete') {
+      const a = args[1]; const r = parseRuleArg(args[2]);
+      if (!(a === 'allow' || a === 'deny' || a === 'reject') || !r) return MR('ufwDeleteSyntax', [], { kind: 'err' });
+      const before = st.rules.length;
+      st.rules = st.rules.filter(function (x) { return !(x.port === r.port && x.proto === r.proto && x.action === a); });
+      if (st.rules.length === before) return R('Could not delete non-existing rule\nCould not delete non-existing rule (v6)', { taggable: true });
+      return R('Rule deleted\nRule deleted (v6)', { taggable: true });
+    }
+    return MR('ufwSub', [], { kind: 'err' });
+  }
+  function cmdSystemctl(st, args, sudo) {
+    if (!sudo) return E('Failed to ' + (args[0] || 'run') + ' unit: Interactive authentication required.');
+    const act = args[0]; const unit = (args[1] || '').replace(/\.service$/, '');
+    const isApache = unit === 'apache2'; const isSsh = (unit === 'ssh' || unit === 'sshd');
+    if (!isApache && !isSsh) return E('Failed to ' + act + ' ' + unit + '.service: Unit ' + unit + '.service not found.');
+    if (isApache && !st.apacheInstalled) return E('Failed to ' + act + ' apache2.service: Unit apache2.service not found.');
+    const key = isApache ? 'apache' : 'ssh';
+    if (act === 'stop') { st[key] = false; return R('', { taggable: true }); }
+    if (act === 'start' || act === 'restart') { st[key] = true; return R('', { taggable: true }); }
+    if (act === 'status') return R('● ' + (isApache ? 'apache2' : 'ssh') + '.service\n     Active: ' + (st[key] ? 'active (running)' : 'inactive (dead)'), { taggable: true, reasons: ['sortie de systemctl status simplifiée'] });
+    return MR('sysctlActions', [], { kind: 'err' });
+  }
+  function cmdApt(st, args, sudo) {
+    if (!sudo) return E('E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)');
+    const sub = args[0];
+    const net = st.nat;
+    if (sub === 'update') {
+      if (!net) return MR('aptUpdateNoNet', [], { kind: 'err', taggable: true, reasons: ['sortie d’apt simplifiée'] });
+      return R('Hit:1 http://archive.ubuntu.com/ubuntu InRelease\nReading package lists... Done', { taggable: true, reasons: ['sortie d’apt update simplifiée (le lab n’a pas relevé son texte)'] });
+    }
+    if (sub === 'install') {
+      const pkgs = args.slice(1).filter(function (a) { return a.charAt(0) !== '-'; });
+      if (pkgs.length !== 1 || pkgs[0] !== 'apache2') return MR('aptOnlyApache', [], { kind: 'err' });
+      if (st.apacheInstalled) return R('apache2 is already the newest version (2.4.66-2ubuntu2.6).\nSummary:\n  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 170', { taggable: true });
+      if (!net) return MR('aptInstallNoNet', [], { kind: 'err', taggable: true, reasons: ['sortie d’apt simplifiée'] });
+      st.apacheInstalled = true; st.apache = true;
+      return MR('aptInstalled', [], { taggable: true, reasons: ['installation d’Apache : sortie d’apt abrégée (le lab n’a relevé que la ligne « already the newest version »)'] });
+    }
+    return MR('aptSub', [], { kind: 'err' });
+  }
+  function targetIpAddr(st) {
+    const L = [
+      '1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000',
+      '    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00',
+      '    inet 127.0.0.1/8 scope host lo',
+      '       valid_lft forever preferred_lft forever',
+      '    inet6 ::1/128 scope host noprefixroute',
+      '       valid_lft forever preferred_lft forever',
+      '2: ens33: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000',
+      '    link/ether 00:0c:29:97:a3:e2 brd ff:ff:ff:ff:ff:ff',
+      '    altname enp2s1',
+      '    altname enx000c2997a3e2',
+      '    inet 192.168.86.131/24 metric 100 brd 192.168.86.255 scope global dynamic ens33',
+      '       valid_lft 1673sec preferred_lft 1673sec',
+      '    inet6 fe80::20c:29ff:fe97:a3e2/64 scope link proto kernel_ll',
+      '       valid_lft forever preferred_lft forever'
+    ];
+    if (st.nat) {
+      L.push('3: ens37: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000',
+        '    link/ether 00:0c:29:97:a3:ec brd ff:ff:ff:ff:ff:ff',
+        '    altname enp2s5',
+        '    altname enx000c2997a3ec',
+        '    inet 192.168.159.138/24 metric 1024 brd 192.168.159.255 scope global dynamic ens37',
+        '       valid_lft 1733sec preferred_lft 1733sec',
+        '    inet6 fe80::20c:29ff:fe97:a3ec/64 scope link proto kernel_ll',
+        '       valid_lft forever preferred_lft forever');
+    }
+    return L.join('\n');
+  }
+  function cmdTail(st, args, sudo) {
+    let n = 10; let path = null;
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === '-n') n = parseInt(args[++i], 10);
+      else if (/^-n\d+$/.test(args[i])) n = parseInt(args[i].slice(2), 10);
+      else if (args[i].charAt(0) !== '-') path = args[i];
+    }
+    if (!path) return MR('tailNeedFile', [], { kind: 'err' });
+    const pre = sudo ? '[sudo: authenticate] Password:\n' : '';
+    if (path === '/var/log/ufw.log') {
+      if (!st.ufwEver) return E(pre + 'tail: cannot open \'/var/log/ufw.log\' for reading: No such file or directory');
+      return R(pre + st.logs.ufw.slice(-n).join('\n'), { taggable: true, reasons: ['format des lignes UFW BLOCK reconstitué d’après les deux lignes relevées dans le lab'] });
+    }
+    if (path === '/var/log/apache2/access.log') {
+      if (!st.apacheInstalled) return E(pre + 'tail: cannot open \'/var/log/apache2/access.log\' for reading: No such file or directory');
+      return R(pre + st.logs.apache.slice(-n).join('\n'), { taggable: true });
+    }
+    return MR('tailOnlyFiles', [], { kind: 'err' });
+  }
+  function execCible(st, line) {
+    const raw = line.trim();
+    if (!raw) return R('');
+    const toks = raw.split(/\s+/);
+    let sudo = false;
+    if (toks[0] === 'sudo') { sudo = true; toks.shift(); }
+    const cmd = toks[0]; const args = toks.slice(1);
+    let res;
+    if (cmd === 'help') res = MR('helpCible');
+    else if (cmd === 'ip' && (args[0] === 'addr' || args[0] === 'a')) res = R(targetIpAddr(st), { taggable: true });
+    else if (cmd === 'ss' && (args[0] === '-tln' || args[0] === '-uln')) {
+      if (args[0] === '-tln') {
+        const rows = [['LISTEN', '0', '4096', '127.0.0.53%lo:53', '0.0.0.0:*'], ['LISTEN', '0', '4096', '127.0.0.54:53', '0.0.0.0:*']];
+        const reasons = [];
+        if (st.ssh) { rows.push(['LISTEN', '0', '4096', '0.0.0.0:22', '0.0.0.0:*']); rows.push(['LISTEN', '0', '4096', '[::]:22', '[::]:*']); }
+        if (st.apache) rows.push(['LISTEN', '0', '511', '*:80', '*:*']);
+        if (st.https) { rows.push(['LISTEN', '0', '511', '*:443', '*:*']); reasons.push('HTTPS en écoute (jamais configuré dans le lab)'); }
+        res = R(ssTable(rows), { taggable: true, reasons: reasons });
+      } else {
+        res = R(ssTable([['UNCONN', '0', '0', '127.0.0.1:323', '0.0.0.0:*'], ['UNCONN', '0', '0', '127.0.0.54:53', '0.0.0.0:*'], ['UNCONN', '0', '0', '127.0.0.53%lo:53', '0.0.0.0:*'], ['UNCONN', '0', '0', '192.168.86.131%ens33:68', '0.0.0.0:*'], ['UNCONN', '0', '0', '[::1]:323', '[::]:*']]), { taggable: true });
+      }
+    }
+    else if (cmd === 'ufw') res = cmdUfw(st, args, sudo);
+    else if (cmd === 'systemctl') res = cmdSystemctl(st, args, sudo);
+    else if (cmd === 'apt') res = cmdApt(st, args, sudo);
+    else if (cmd === 'tail') res = cmdTail(st, args, sudo);
+    else if (cmd === 'whoami') res = R('labuser');
+    else if (cmd === 'hostname') res = R('cible-lab');
+    else res = MR('bashUnsupported', [cmd], { kind: 'err' });
+    if (res.taggable) {
+      if (sudo && res.kind === 'out' && cmd !== 'tail' && cmd !== 'help') {
+        const sp = '[sudo: authenticate] Password:';
+        res.text = sp + (res.text ? '\n' + res.text : '');
+        if (res.msg) res.msg.pre = sp;
+      }
+      res.tag = classify(st, 'cible', raw, res.reasons);
+    }
+    return res;
+  }
+
+  return {
+    IP: IP, newState: newState, preset: preset, replaceState: replaceState, setRule: setRule, getRule: getRule, describe: describe,
+    setLang: setLang, getLang: getLang, msg: msg,
+    execKali: execKali, execCible: execCible, setRandom: setRandom, tcpState: tcpState, ackState: ackState, udpState: udpState, stateKey: stateKey, parsePorts: parsePorts
+  };
+})();
+
+/*ENGINE-END*/
+
+const UI = {"fr":{"title":"Simulateur du lab Nmap","subtitle":"Apprenez la reconnaissance réseau pas à pas","simBadge":"Simulation","simTip":"Rien n'est scanné : tout est calculé dans la page.","mission":"Mission","of":"sur","machine":"Machine","learn":"À comprendre","concepts":"Notions clés","do":"À faire","run":"Exécuter","fillHint":"Pré-remplir","nothing":"Rien à faire ici, lisez puis passez à la suite.","wrongMachine":"Vous devez être sur l'autre machine. Cliquez sur l'onglet correspondant en haut.","wrongCmd":"Ce n'est pas la commande attendue pour cette mission. Astuce :","panel":"Panneau de contrôle de la cible","panelDesc":"Modifie l'état réel de la cible (certaines missions l'utilisent).","ssh":"SSH actif (port 22)","apache":"Apache actif (port 80)","https":"HTTPS actif (port 443)","ufwOn":"Pare-feu ufw actif","natOn":"Carte NAT branchée","rulesTitle":"Règles du pare-feu","rulePort":"Port","ruleAction":"Action","quickUfw":"Activer le pare-feu avec les règles (22 ALLOW, 80 DENY)","analysis":"Analyse de la sortie","analysisEmpty":"Exécutez la commande pour voir l'analyse ici.","see":"Ce que vous voyez","why":"Pourquoi","keep":"À retenir","nextMission":"Mission suivante","prevMission":"Mission précédente","progress":"Progression","finish":"Terminer","restart":"Recommencer le jeu","confirmRestart":"Effacer la progression et recommencer depuis le début ?","noneRule":"aucune","allow":"ALLOW","deny":"DENY","reject":"REJECT","resumeTitle":"Reprise","resumeBody":"Vous aviez atteint la mission","resumeYes":"Reprendre","resumeNo":"Recommencer","about":"À propos","aboutBody":"Simulation pédagogique basée sur un lab VMware réel (Kali, Ubuntu Server, Nmap 7.99). Chaque sortie reproduit des mesures observées.","machineKali":"Kali · analyse","machineCible":"Cible · Ubuntu Server","term_free":"Terminal libre : tapez ce que vous voulez, ou retournez à la mission.","banner_kali":"Dernière connexion depuis 192.168.86.1","banner_cible":"Ubuntu 26.04.1 LTS cible-lab tty1","doneBtn":"J'ai lu, continuer","skipped":"Vous pouvez aussi utiliser le panneau de contrôle pour forcer l'état attendu.","lang":"Langue","skipLink":"Aller au terminal","vmKali":"Analyse-Kali","vmCible":"Cible-Ubuntu-Server","congratsTitle":"🎉 Lab terminé !","congratsBody":"Vous avez bouclé les 18 missions : vous savez désormais mener une reconnaissance réseau méthodique avec Nmap, de la découverte d’hôtes à l’interprétation des états de ports, en justifiant chaque conclusion par une observation.","congratsRestart":"Recommencer le lab","congratsQuit":"Quitter la simulation","congratsQuitHint":"Vous pouvez aussi fermer cet onglet à tout moment.","objectiveLabel":"🎯 Objectif","prereqLabel":"⚠️ Avant de continuer","step":"Étape","partIntroLabel":"Mise en route","partOutroLabel":"Bilan final","p1Label":"Partie 1","p1Title":"Pare-feu désactivé","p1Goal":"Cartographier entièrement la cible alors qu'aucune restriction réseau n'est active, et apprendre à lire un scan Nmap.","p2Label":"Partie 2","p2Title":"Pare-feu actif","p2Goal":"Refaire les mêmes vérifications avec le pare-feu actif, pour mesurer précisément son effet sur chaque port et dans les journaux."},"en":{"title":"Nmap lab simulator","subtitle":"Learn network reconnaissance step by step","simBadge":"Simulation","simTip":"Nothing is scanned: everything is computed in the page.","mission":"Mission","of":"of","machine":"Machine","learn":"Learn","concepts":"Key concepts","do":"Do","run":"Run","fillHint":"Pre-fill","nothing":"Nothing to run here, read then move on.","wrongMachine":"You must be on the other machine. Click the matching tab at the top.","wrongCmd":"That's not the expected command for this mission. Hint:","panel":"Target control panel","panelDesc":"Edits the target's actual state (some missions use it).","ssh":"SSH active (port 22)","apache":"Apache active (port 80)","https":"HTTPS active (port 443)","ufwOn":"ufw firewall active","natOn":"NAT card attached","rulesTitle":"Firewall rules","rulePort":"Port","ruleAction":"Action","quickUfw":"Enable firewall with rules (22 ALLOW, 80 DENY)","analysis":"Output analysis","analysisEmpty":"Run the command to see the analysis here.","see":"What you see","why":"Why","keep":"Takeaway","nextMission":"Next mission","prevMission":"Previous mission","progress":"Progress","finish":"Finish","restart":"Restart game","confirmRestart":"Erase progress and start over?","noneRule":"none","allow":"ALLOW","deny":"DENY","reject":"REJECT","resumeTitle":"Resume","resumeBody":"You had reached mission","resumeYes":"Resume","resumeNo":"Start over","about":"About","aboutBody":"Educational simulation based on a real VMware lab (Kali, Ubuntu Server, Nmap 7.99). Each output reproduces measured results.","machineKali":"Kali · analysis","machineCible":"Target · Ubuntu Server","term_free":"Free terminal: type anything, or return to the mission.","banner_kali":"Last login from 192.168.86.1","banner_cible":"Ubuntu 26.04.1 LTS cible-lab tty1","doneBtn":"I've read, continue","skipped":"You can also use the control panel to force the expected state.","lang":"Language","skipLink":"Go to terminal","vmKali":"Analysis-Kali","vmCible":"Target-Ubuntu-Server","congratsTitle":"🎉 Lab complete!","congratsBody":"You’ve completed all 18 missions: you now know how to run a methodical network reconnaissance with Nmap, from host discovery to interpreting port states, backing every conclusion with an observation.","congratsRestart":"Restart the lab","congratsQuit":"Quit simulation","congratsQuitHint":"You can also close this tab at any time.","objectiveLabel":"🎯 Objective","prereqLabel":"⚠️ Before you continue","step":"Step","partIntroLabel":"Getting started","partOutroLabel":"Final summary","p1Label":"Part 1","p1Title":"Firewall disabled","p1Goal":"Fully map the target while no network restriction is active, and learn to read an Nmap scan.","p2Label":"Part 2","p2Title":"Firewall active","p2Goal":"Redo the same checks with the firewall active, to precisely measure its effect on each port and in the logs."}};
+const MISSIONS = [{"id":"intro","machine":"intro","action":"none","title":{"fr":"Bienvenue dans le laboratoire","en":"Welcome to the lab"},"subtitle":{"fr":"Reconnaissance réseau avec Nmap","en":"Network reconnaissance with Nmap"},"lesson":{"fr":"Ce jeu rejoue un vrai laboratoire. Deux machines virtuelles tournent dans un réseau privé isolé : <b>Kali Linux</b>, la machine d'analyse, et <b>Ubuntu Server</b>, la cible. Vous allez apprendre à découvrir ce qui écoute sur le réseau, interpréter chaque résultat, et évaluer la surface d'attaque.<br><br>Vous travaillerez comme un auditeur : chaque affirmation devra être justifiée par une observation, jamais par une supposition.<br><br><b>Le laboratoire se déroule en deux parties</b> : dans la <b>Partie 1</b>, le pare-feu de la cible est désactivé et vous cartographiez librement ce qui est exposé. Dans la <b>Partie 2</b>, vous activerez le pare-feu et referez les mêmes vérifications pour mesurer précisément son effet. Chaque étape affiche son objectif avant la commande à exécuter — vous n'avez jamais à deviner quoi taper.","en":"This game replays a real lab. Two virtual machines run on an isolated private network: <b>Kali Linux</b>, the analysis machine, and <b>Ubuntu Server</b>, the target. You'll learn to discover what's listening on the network, interpret each result, and assess the attack surface.<br><br>You'll work like an auditor: every claim must be backed by an observation, never by a guess.<br><br><b>The lab runs in two parts</b>: in <b>Part 1</b>, the target's firewall is disabled and you freely map what's exposed. In <b>Part 2</b>, you'll enable the firewall and redo the same checks to measure its effect precisely. Every step shows its objective before the command to run — you never have to guess what to type."},"concepts":{"fr":[["Reconnaissance","Collecter des informations sur un système avant toute évaluation. Active (envoie des paquets, visible) ou passive (écoute sans envoyer)."],["Port","Numéro de 0 à 65535 qui désigne une application sur une machine. SSH = 22, HTTP = 80, HTTPS = 443."],["TCP","Protocole avec connexion : SYN, SYN-ACK, ACK. Sa réponse à une sonde révèle l'état du port."],["État d'un port","open (un service répond), closed (rien n'écoute), filtered (un pare-feu jette la sonde)."]],"en":[["Reconnaissance","Gathering information about a system before any assessment. Active (sends packets, visible) or passive (listens silently)."],["Port","A number from 0 to 65535 identifying an application on a machine. SSH = 22, HTTP = 80, HTTPS = 443."],["TCP","Connection-oriented protocol: SYN, SYN-ACK, ACK. Its response to a probe reveals the port state."],["Port state","open (a service answers), closed (nothing listens), filtered (a firewall drops the probe)."]]}},{"id":"ip-cible","machine":"cible","part":"p1","partIntro":true,"title":{"fr":"Trouver l'adresse IP de la cible","en":"Find the target's IP address"},"subtitle":{"fr":"Vous êtes connecté sur la console d'Ubuntu Server","en":"You're on the Ubuntu Server console"},"objective":{"fr":"Relever l'adresse IPv4 de la cible depuis sa propre console, pour savoir quoi scanner ensuite.","en":"Note the target's IPv4 address from its own console, so you know what to scan next."},"lesson":{"fr":"Avant de scanner, il faut connaître l'adresse de la cible. <code>ip addr</code> liste toutes les interfaces réseau. Cherchez une ligne <code>inet</code> sur l'interface <code>ens33</code> : c'est l'adresse IPv4 attribuée par le DHCP de VMware.<br><br>L'adresse peut changer d'une session à l'autre : relevez-la à chaque fois.","en":"Before scanning, you need the target's address. <code>ip addr</code> lists every network interface. Look for an <code>inet</code> line on <code>ens33</code>: that's the IPv4 address assigned by VMware's DHCP.<br><br>The address can change between sessions, so note it down each time."},"action":"run","expect":"ip addr","analysis":{"fr":{"see":"Deux interfaces apparaissent : <code>lo</code> (boucle locale, 127.0.0.1) et <code>ens33</code> (la carte virtuelle). Sur <code>ens33</code>, la ligne <code>inet 192.168.86.131/24</code> donne l'adresse et le masque, et <code>link/ether 00:0c:29:97:a3:e2</code> donne l'adresse MAC.","why":"Le préfixe <code>00:0c:29</code> identifie une machine virtuelle VMware. Le <code>/24</code> signifie que la cible est dans le sous-réseau 192.168.86.0 avec un masque 255.255.255.0 : toutes les machines commençant par 192.168.86. peuvent communiquer directement.","keep":"La cible est joignable à <b>192.168.86.131</b>. Nous l'utiliserons depuis Kali pour tous les scans."},"en":{"see":"Two interfaces appear: <code>lo</code> (loopback, 127.0.0.1) and <code>ens33</code> (the virtual card). On <code>ens33</code>, the line <code>inet 192.168.86.131/24</code> shows the address and mask, and <code>link/ether 00:0c:29:97:a3:e2</code> gives the MAC.","why":"The prefix <code>00:0c:29</code> identifies a VMware VM. The <code>/24</code> means the target is in subnet 192.168.86.0 with mask 255.255.255.0: any machine starting with 192.168.86. can talk directly.","keep":"The target is reachable at <b>192.168.86.131</b>. We'll use it from Kali for all scans."}}},{"id":"ufw-initial","machine":"cible","part":"p1","title":{"fr":"Vérifier l'état du pare-feu","en":"Check the firewall state"},"subtitle":{"fr":"Toujours sur la cible","en":"Still on the target"},"objective":{"fr":"Confirmer que le pare-feu de la cible est désactivé, pour garantir que les scans à venir montrent l'exposition réelle, sans filtrage.","en":"Confirm the target's firewall is disabled, so upcoming scans show real exposure with no filtering."},"lesson":{"fr":"<code>ufw</code> est le pare-feu standard d'Ubuntu. Son état par défaut est inactif : rien n'est filtré. Cette vérification est importante : un pare-feu actif changerait l'interprétation de tous nos scans.","en":"<code>ufw</code> is Ubuntu's standard firewall. Its default state is inactive: nothing is filtered. This check matters: an active firewall would change how we interpret every scan."},"action":"run","expect":"sudo ufw status","analysis":{"fr":{"see":"<code>Status: inactive</code>. Aucune règle n'est listée.","why":"Sur Ubuntu, <code>ufw</code> est installé mais pas démarré par défaut. Tout ce qui écoute sur la cible est donc joignable depuis le réseau du laboratoire.","keep":"Le pare-feu est hors jeu pour toute la Partie 1. Nous l'activerons de façon contrôlée dans la Partie 2, pour mesurer son effet."},"en":{"see":"<code>Status: inactive</code>. No rule is listed.","why":"On Ubuntu, <code>ufw</code> is installed but not started by default. Anything listening on the target is reachable from the lab network.","keep":"The firewall is off the table for all of Part 1. We'll enable it in a controlled way in Part 2, to measure its effect."}}},{"id":"ss-initial","machine":"cible","part":"p1","title":{"fr":"Voir les services qui écoutent","en":"See listening services"},"objective":{"fr":"Lister, depuis la cible elle-même, les ports TCP réellement en écoute — la référence à laquelle comparer les scans Nmap.","en":"List, from the target itself, the TCP ports actually listening — the baseline to compare Nmap scans against."},"lesson":{"fr":"<code>ss -tln</code> affiche les sockets TCP en écoute. <code>-t</code> pour TCP, <code>-l</code> pour listening, <code>-n</code> pour ne pas résoudre les noms. C'est la vue de l'intérieur : ce que la machine sait d'elle-même, à comparer plus tard à ce que Nmap voit depuis l'extérieur.","en":"<code>ss -tln</code> shows TCP sockets that are listening. <code>-t</code> for TCP, <code>-l</code> for listening, <code>-n</code> for numeric. This is the inside view: what the machine knows about itself, which we'll later compare with what Nmap sees from outside."},"action":"run","expect":"ss -tln","analysis":{"fr":{"see":"Quatre lignes <code>LISTEN</code>. Deux pour SSH (port 22 en IPv4 et IPv6), deux pour un résolveur DNS local lié à <code>127.0.0.53</code> et <code>127.0.0.54</code>.","why":"L'adresse <code>0.0.0.0:22</code> signifie que SSH écoute sur <b>toutes</b> les interfaces réseau. À l'inverse, <code>127.0.0.53</code> est le loopback : ces écouteurs DNS ne répondent qu'à la cible elle-même, pas au réseau.","keep":"Seul le port 22 est exposé au réseau. C'est notre prédiction pour Nmap : il devrait voir 22 ouvert, et rien d'autre."},"en":{"see":"Four <code>LISTEN</code> lines. Two for SSH (port 22 over IPv4 and IPv6), two for a local DNS resolver bound to <code>127.0.0.53</code> and <code>127.0.0.54</code>.","why":"<code>0.0.0.0:22</code> means SSH listens on <b>all</b> network interfaces. In contrast, <code>127.0.0.53</code> is the loopback: those DNS listeners answer only the target itself, not the network.","keep":"Only port 22 is exposed to the network. That's our prediction for Nmap: it should see 22 open, and nothing else."}}},{"id":"ip-kali","machine":"kali","part":"p1","title":{"fr":"Passer sur Kali et relever son adresse","en":"Switch to Kali and check its address"},"subtitle":{"fr":"Changez de VM avec l'onglet en haut","en":"Switch VM via the tab at the top"},"objective":{"fr":"Relever l'adresse IPv4 de Kali et confirmer qu'elle partage le sous-réseau de la cible.","en":"Note Kali's IPv4 address and confirm it shares the target's subnet."},"lesson":{"fr":"Kali est votre machine d'analyse. Elle doit être dans le même sous-réseau que la cible pour pouvoir la joindre. Comme pour Ubuntu, <code>ip addr</code> donne l'adresse.","en":"Kali is your analysis machine. It must be in the same subnet as the target to reach it. Like on Ubuntu, <code>ip addr</code> gives the address."},"action":"run","expect":"ip addr","analysis":{"fr":{"see":"Sur Kali, l'interface est <code>eth0</code> (pas <code>ens33</code>), avec l'adresse <b>192.168.86.132/24</b>.","why":"Les deux machines partagent le sous-réseau <code>192.168.86.0/24</code>. Kali peut donc atteindre la cible directement, sans routeur.","keep":"Le scan ira depuis <b>192.168.86.132</b> (Kali) vers <b>192.168.86.131</b> (cible)."},"en":{"see":"On Kali, the interface is <code>eth0</code> (not <code>ens33</code>), with address <b>192.168.86.132/24</b>.","why":"Both machines share subnet <code>192.168.86.0/24</code>. Kali can reach the target directly, with no router in between.","keep":"Scans will go from <b>192.168.86.132</b> (Kali) to <b>192.168.86.131</b> (target)."}}},{"id":"ping-cible","machine":"kali","part":"p1","title":{"fr":"Tester la connectivité par ping","en":"Test connectivity with ping"},"objective":{"fr":"Vérifier que Kali peut joindre la cible avant de lancer le premier scan.","en":"Verify Kali can reach the target before running the first scan."},"lesson":{"fr":"<code>ping</code> envoie des paquets ICMP Echo Request. Chaque réponse prouve que le chemin réseau fonctionne dans les deux sens. L'option <code>-c 4</code> limite l'envoi à 4 paquets (sinon ping tourne sans fin sous Linux).","en":"<code>ping</code> sends ICMP Echo Request packets. Each reply proves the network path works in both directions. The <code>-c 4</code> option sends just 4 packets (otherwise Linux ping runs forever)."},"action":"run","expect":"ping -c 4 192.168.86.131","analysis":{"fr":{"see":"4 réponses reçues, 0 % de perte, temps autour de 1 ms. Le premier paquet est parfois plus lent (~14 ms).","why":"Le délai du premier paquet vient d'une requête <b>ARP</b> : Kali doit d'abord trouver l'adresse MAC de la cible avant d'envoyer le ping. Les paquets suivants utilisent le cache ARP. Le <code>ttl=64</code> est la valeur par défaut d'un système Linux.","keep":"La connectivité est établie. Nous pouvons scanner."},"en":{"see":"4 replies received, 0% loss, times around 1 ms. The first packet is sometimes slower (~14 ms).","why":"The first packet's delay comes from an <b>ARP</b> request: Kali must first find the target's MAC before sending the ping. Later packets use the ARP cache. <code>ttl=64</code> is the default for a Linux system.","keep":"Connectivity works. We can scan."}}},{"id":"nmap-version","machine":"kali","part":"p1","title":{"fr":"Vérifier Nmap","en":"Check Nmap"},"objective":{"fr":"Confirmer que Nmap est installé sur Kali et relever sa version.","en":"Confirm Nmap is installed on Kali and note its version."},"lesson":{"fr":"Avant d'utiliser un outil, on vérifie qu'il est installé et sa version. <code>--version</code> est la commande universelle.","en":"Before using a tool, check that it's installed and which version. <code>--version</code> is the universal command."},"action":"run","expect":"nmap --version","analysis":{"fr":{"see":"Nmap 7.99, plateforme Linux 64 bits, avec les bibliothèques pour SSL, SSH, la capture de paquets, etc.","why":"<code>libpcap</code> permet à Nmap de forger ses propres paquets. <code>liblua</code> est le moteur de scripts NSE, qui dépasse ce lab.","keep":"La version va dans la section « Outils » du rapport."},"en":{"see":"Nmap 7.99, 64-bit Linux platform, with libraries for SSL, SSH, packet capture, and more.","why":"<code>libpcap</code> lets Nmap craft its own packets. <code>liblua</code> is the NSE scripting engine, beyond this lab's scope.","keep":"The version belongs in the \"Tools\" section of the report."}}},{"id":"scan-simple","machine":"kali","part":"p1","title":{"fr":"Premier scan de la cible","en":"First scan of the target"},"objective":{"fr":"Lancer un premier scan Nmap sans option et comparer son résultat à ce que <code>ss -tln</code> avait annoncé.","en":"Run a first Nmap scan with no options and compare its result to what <code>ss -tln</code> reported."},"lesson":{"fr":"Sans option, Nmap teste les <b>1000 ports TCP les plus courants</b>. Pour chaque port, il envoie un paquet SYN et attend la réponse : SYN-ACK = open, RST = closed, rien = filtered.","en":"With no options, Nmap tests the <b>1000 most common TCP ports</b>. For each one, it sends a SYN packet and waits: SYN-ACK = open, RST = closed, silence = filtered."},"action":"run","expect":"nmap 192.168.86.131","analysis":{"fr":{"see":"Un seul port ouvert : <b>22/tcp</b>, service <code>ssh</code>. 999 ports sont fermés (reset). Le scan prend quelques secondes.","why":"La cible a répondu par un RST (reset) sur 999 ports : rien n'écoute, mais la machine est joignable. C'est exactement ce que <code>ss -tln</code> annonçait. Le mot <code>ssh</code> affiché par Nmap vient d'une table qui associe le numéro de port à un nom : ce n'est pas encore une détection réelle.","keep":"La vue externe (Nmap) correspond à la vue interne (ss). C'est rassurant. Mais attention : les 1000 ports les plus <i>courants</i> ne sont pas <i>tous</i> les ports."},"en":{"see":"Just one open port: <b>22/tcp</b>, service <code>ssh</code>. 999 ports are closed (reset). The scan takes a few seconds.","why":"The target replied with RST on 999 ports: nothing listens, but the machine is reachable. That's exactly what <code>ss -tln</code> told us. The <code>ssh</code> name shown by Nmap comes from a port-to-name table, not real detection.","keep":"The outside view (Nmap) matches the inside view (ss). Reassuring. But note: the 1000 <i>most common</i> ports aren't <i>all</i> ports."}}},{"id":"scan-complet","machine":"kali","part":"p1","title":{"fr":"Scanner tous les ports","en":"Scan every port"},"objective":{"fr":"Scanner les 65 535 ports TCP pour vérifier qu'aucun service ne se cache sur un port inhabituel.","en":"Scan all 65,535 TCP ports to verify no service hides on an unusual port."},"lesson":{"fr":"L'option <code>-p-</code> est un raccourci pour <code>-p 1-65535</code> : tester les 65 535 ports TCP possibles. Plus long, mais exhaustif. <code>-n</code> en prime désactive la résolution DNS inverse pour aller plus vite.","en":"The option <code>-p-</code> is shorthand for <code>-p 1-65535</code>: test all 65,535 possible TCP ports. Slower, but exhaustive. Add <code>-n</code> to skip reverse DNS and go faster."},"action":"run","expect":"nmap -n -p- 192.168.86.131","analysis":{"fr":{"see":"Toujours un seul port ouvert : 22/tcp. Les 65 534 autres sont fermés. Le scan a duré environ 10 secondes.","why":"Même en testant la plage complète, il n'y a aucun service caché sur un port inhabituel. Sans pare-feu, chaque RST revient en moins d'une milliseconde, ce qui rend 65 535 ports très rapides à scanner.","keep":"On peut maintenant <b>affirmer</b> (et non plus supposer) que SSH est le seul service TCP exposé au moment du test."},"en":{"see":"Still a single open port: 22/tcp. The other 65,534 are closed. The scan took about 10 seconds.","why":"Even testing the full range, no service hides on an unusual port. Without a firewall, each RST comes back in under a millisecond, which makes 65,535 ports fast to scan.","keep":"We can now <b>state</b> (not merely suppose) that SSH is the only exposed TCP service at test time."}}},{"id":"detect-version","machine":"kali","part":"p1","title":{"fr":"Détecter le logiciel et sa version","en":"Detect software and version"},"objective":{"fr":"Identifier précisément le logiciel et la version qui répondent sur le port 22.","en":"Precisely identify the software and version answering on port 22."},"lesson":{"fr":"<code>-sV</code> force Nmap à établir une vraie connexion et à lire la <b>bannière</b> du service. On apprend quel logiciel écoute et dans quelle version. C'est plus intrusif : la connexion apparaîtra dans les journaux de la cible.","en":"<code>-sV</code> makes Nmap establish a real connection and read the service's <b>banner</b>. We learn the software and version. More intrusive: the connection will appear in the target's logs."},"action":"run","expect":"nmap -n -sV -p 22 192.168.86.131","analysis":{"fr":{"see":"Le port 22 est servi par <b>OpenSSH 10.2p1</b>, compilé par Ubuntu (<code>2ubuntu3.5</code>). Protocole SSH version 2. Nmap devine aussi l'OS : Linux.","why":"OpenSSH annonce son logiciel et sa version dès l'ouverture de la connexion. Nmap n'a eu qu'à lire ce que le service a envoyé.","keep":"<b>Une version détectée n'est pas une vulnérabilité.</b> Ubuntu rétroporte les correctifs sans changer le numéro amont. Il faudrait consulter les avis de sécurité pour ce paquet précis."},"en":{"see":"Port 22 is served by <b>OpenSSH 10.2p1</b>, Ubuntu-compiled (<code>2ubuntu3.5</code>). SSH protocol version 2. Nmap also guesses the OS: Linux.","why":"OpenSSH announces its software and version as soon as the connection opens. Nmap just read what the service sent.","keep":"<b>A detected version is not a vulnerability.</b> Ubuntu backports fixes without changing the upstream number. You'd need to check security advisories for this specific package."}}},{"id":"decouverte","machine":"kali","part":"p1","title":{"fr":"Découvrir toutes les machines actives","en":"Discover all live machines"},"objective":{"fr":"Découvrir toutes les machines actives du sous-réseau, sans scanner leurs ports.","en":"Discover every live machine on the subnet, without scanning their ports."},"lesson":{"fr":"<code>-sn</code> dit à Nmap de ne pas scanner les ports, seulement de dire qui est vivant. Sur un réseau local, il utilise <b>ARP</b>, plus fiable que le ping (qu'un pare-feu pourrait bloquer). <code>/24</code> cible les 256 adresses du sous-réseau.","en":"<code>-sn</code> tells Nmap not to scan ports, only report who's alive. On a local network, it uses <b>ARP</b>, more reliable than ping (which a firewall might block). <code>/24</code> targets all 256 subnet addresses."},"action":"run","expect":"nmap -sn 192.168.86.0/24","analysis":{"fr":{"see":"Quatre hôtes actifs : <code>.1</code> (Windows hôte), <code>.131</code> (la cible), <code>.254</code> (service DHCP de VMware) et <code>.132</code> (Kali, qui se déclare actif sans ARP).","why":"Le préfixe MAC <code>00:50:56</code> est VMware pour ses composants internes (carte hôte, DHCP). Le préfixe <code>00:0c:29</code> est VMware pour les cartes des VM.","keep":"Sur un vrai réseau, ce scan dresse l'inventaire des machines. C'est la première étape de toute cartographie."},"en":{"see":"Four live hosts: <code>.1</code> (Windows host), <code>.131</code> (the target), <code>.254</code> (VMware DHCP) and <code>.132</code> (Kali, which declares itself without ARP).","why":"The MAC prefix <code>00:50:56</code> is VMware for its internal components (host adapter, DHCP). The prefix <code>00:0c:29</code> is VMware for VM cards.","keep":"On a real network, this scan inventories the machines. It's the first step of any mapping effort."}}},{"id":"install-apache","machine":"cible","part":"p1","title":{"fr":"Installer un deuxième service","en":"Install a second service"},"subtitle":{"fr":"Retour sur la cible","en":"Back on the target"},"objective":{"fr":"Installer Apache sur la cible pour observer, dans les étapes suivantes, l'effet d'un nouveau service sur un scan.","en":"Install Apache on the target to observe, in the next steps, the effect of a new service on a scan."},"prereq":{"fr":"Activez d'abord la carte NAT dans le panneau de contrôle de la cible (à droite) : sans elle, la cible n'a pas accès à Internet pour télécharger le paquet.","en":"First enable the NAT card in the target's control panel (on the right): without it, the target has no Internet access to download the package."},"lesson":{"fr":"Pour mesurer l'effet d'un service sur un scan, nous ajoutons Apache (serveur web). Comme la cible est en Host-only et n'a pas Internet, nous activons temporairement une carte NAT depuis le panneau de contrôle de la cible.","en":"To see the effect of a service on a scan, we add Apache (web server). Since the target is Host-only without Internet, we temporarily attach a NAT card via the target's control panel."},"action":"run","expect":"sudo apt install -y apache2","requires":{"nat":true},"requires_msg":{"fr":"La carte NAT doit être activée dans le panneau de contrôle avant d'installer Apache.","en":"The NAT card must be enabled in the control panel before installing Apache."},"analysis":{"fr":{"see":"Les paquets sont téléchargés et installés. Apache démarre automatiquement et écoute sur le port 80.","why":"Ubuntu démarre les services au moment de leur installation. Pas besoin de <code>systemctl start</code>.","keep":"Apache est en place. Nous pouvons maintenant retirer la carte NAT pour revenir à l'isolation du laboratoire."},"en":{"see":"Packages are downloaded and installed. Apache auto-starts and listens on port 80.","why":"Ubuntu starts services at install time. No need for <code>systemctl start</code>.","keep":"Apache is in place. We can now remove the NAT card to restore lab isolation."}},"auto_after":{"nat":false}},{"id":"scan-apache","machine":"kali","part":"p1","title":{"fr":"Voir l'effet d'un nouveau service","en":"See the effect of a new service"},"subtitle":{"fr":"Retour sur Kali","en":"Back to Kali"},"objective":{"fr":"Refaire le même scan qu'avant et observer comment le port 80 a changé d'état depuis l'installation d'Apache.","en":"Redo the same scan as before and observe how port 80's state changed since installing Apache."},"lesson":{"fr":"Même commande qu'avant, même cible, même réseau. Seule différence : Apache tourne désormais sur la cible. Prédisez le résultat avant d'exécuter : le port 80 sera-t-il open ou closed ?","en":"Same command as before, same target, same network. Only difference: Apache is now running. Predict the result before executing: will port 80 be open or closed?"},"action":"run","expect":"nmap -n -p 22,80,443 192.168.86.131","analysis":{"fr":{"see":"Le port 80 est passé de <b>closed</b> à <b>open</b>. Le 22 reste ouvert, le 443 reste fermé.","why":"Rien n'a changé sur le réseau : seul le logiciel qui écoute a changé. Apache répond maintenant par SYN-ACK sur le port 80. Le 443 reste closed car Apache n'a pas HTTPS configuré par défaut.","keep":"<b>L'état d'un port dépend des logiciels qui écoutent</b>, pas de la topologie réseau."},"en":{"see":"Port 80 moved from <b>closed</b> to <b>open</b>. Port 22 stays open, 443 stays closed.","why":"Nothing changed on the network: only the listening software changed. Apache now answers SYN-ACK on port 80. 443 stays closed because Apache doesn't ship HTTPS by default.","keep":"<b>A port's state depends on what's listening</b>, not on network topology."}}},{"id":"sv-apache","machine":"kali","part":"p1","title":{"fr":"Identifier Apache et voir sa trace","en":"Identify Apache and see its trace"},"objective":{"fr":"Identifier précisément le logiciel web qui répond désormais sur le port 80.","en":"Precisely identify the web software now answering on port 80."},"lesson":{"fr":"Relançons <code>-sV</code>, mais cette fois avec le port 80. Nmap va interroger Apache et laissera une trace dans ses journaux, que nous irons voir juste après.","en":"Let's run <code>-sV</code> again, this time including port 80. Nmap will probe Apache and leave a trace in its logs, which we'll check right after."},"action":"run","expect":"nmap -n -sV -p 22,80 192.168.86.131","analysis":{"fr":{"see":"22/tcp : OpenSSH 10.2p1. 80/tcp : <b>Apache httpd 2.4.66 ((Ubuntu))</b>.","why":"La mention <code>((Ubuntu))</code> dans la bannière révèle l'OS à un attaquant : il peut cibler ses recherches. C'est une <b>fuite d'information</b>, atténuable avec la directive <code>ServerTokens Prod</code>.","keep":"Une bannière est une donnée publique : minimisez-la en production."},"en":{"see":"22/tcp: OpenSSH 10.2p1. 80/tcp: <b>Apache httpd 2.4.66 ((Ubuntu))</b>.","why":"The <code>((Ubuntu))</code> in the banner reveals the OS to an attacker: they can narrow their research. It's an <b>information leak</b>, mitigated with the <code>ServerTokens Prod</code> directive.","keep":"A banner is public data: minimize it in production."}}},{"id":"trace-apache","machine":"cible","part":"p1","title":{"fr":"Voir la trace du scan dans les journaux","en":"See the scan trace in the logs"},"subtitle":{"fr":"Retour sur la cible","en":"Back on the target"},"objective":{"fr":"Retrouver, dans les journaux Apache de la cible, la trace laissée par le scan précédent.","en":"Find, in the target's Apache logs, the trace left by the previous scan."},"lesson":{"fr":"Côté cible, chaque requête HTTP reçue est journalisée dans <code>/var/log/apache2/access.log</code>. Nous allons voir ce que Nmap a laissé derrière lui.","en":"On the target side, every HTTP request received is logged in <code>/var/log/apache2/access.log</code>. Let's see what Nmap left behind."},"action":"run","expect":"sudo tail -n 5 /var/log/apache2/access.log","analysis":{"fr":{"see":"Cinq lignes, toutes venant de <code>192.168.86.132</code> (Kali). Trois erreurs 404 sur des chemins bizarres (<code>/nmaplowercheck</code>, <code>/HNAP1</code>, <code>/evox/about</code>), deux requêtes <code>GET /</code> en 200.","why":"Les chemins bizarres sont des <b>sondes d'identification</b> : Nmap teste des URL qui n'existent sur aucun site normal, pour voir comment le serveur répond. L'agent utilisateur <code>Nmap Scripting Engine</code> l'identifie clairement.","keep":"<b>Un scan n'est jamais invisible.</b> Un administrateur peut repérer <code>-sV</code> dans ses journaux. C'est ici que se termine la Partie 1 : la cible est entièrement cartographiée, sans aucune restriction réseau."},"en":{"see":"Five lines, all from <code>192.168.86.132</code> (Kali). Three 404 errors on odd paths (<code>/nmaplowercheck</code>, <code>/HNAP1</code>, <code>/evox/about</code>), two <code>GET /</code> with 200.","why":"The odd paths are <b>identification probes</b>: Nmap tests URLs that exist on no normal site, to see how the server responds. The user agent <code>Nmap Scripting Engine</code> identifies it clearly.","keep":"<b>A scan is never invisible.</b> An administrator can spot <code>-sV</code> in their logs. This is where Part 1 ends: the target is now fully mapped, with no network restriction in place."}}},{"id":"ufw-enable","machine":"cible","part":"p2","partIntro":true,"title":{"fr":"Activer le pare-feu et bloquer le port 80","en":"Enable the firewall and block port 80"},"subtitle":{"fr":"Retour sur la cible","en":"Back on the target"},"objective":{"fr":"Activer le pare-feu de la cible avec deux règles : autoriser SSH, bloquer HTTP.","en":"Enable the target's firewall with two rules: allow SSH, block HTTP."},"lesson":{"fr":"Nous allons activer <code>ufw</code> avec deux règles : autoriser SSH (sinon nous perdrions l'accès), refuser HTTP. Toutes les autres connexions entrantes seront refusées par défaut.<br><br>Cliquez sur le bouton « Activer le pare-feu avec les règles » dans le panneau de contrôle, ou saisissez les trois commandes vous-même, dans l'ordre affiché ci-dessous.","en":"Let's enable <code>ufw</code> with two rules: allow SSH (or we'd lose access), deny HTTP. All other incoming connections will be refused by default.<br><br>Click « Enable firewall with rules » in the control panel, or type the three commands yourself, in the order shown below."},"action":"sequence","expect":["sudo ufw allow 22/tcp","sudo ufw deny 80/tcp","sudo ufw enable"],"analysis":{"fr":{"see":"Chaque commande confirme son effet. <code>ufw enable</code> active le pare-feu, qui démarrera aussi à chaque redémarrage.","why":"L'ordre est important : la règle <code>allow 22</code> doit exister <b>avant</b> l'activation, sinon une connexion SSH en cours serait coupée. Ici nous sommes sur la console directe, donc ce n'est pas un vrai risque.","keep":"Le pare-feu est maintenant actif : la Partie 2 commence. Nous allons refaire les mêmes vérifications que dans la Partie 1 pour mesurer précisément son effet."},"en":{"see":"Each command confirms its effect. <code>ufw enable</code> activates the firewall, which will also start on every boot.","why":"Order matters: the <code>allow 22</code> rule must exist <b>before</b> enabling, or an in-progress SSH session would be dropped. Here we're on the direct console, so it's not a real risk.","keep":"The firewall is now active: Part 2 begins. We'll redo the same checks as in Part 1 to precisely measure its effect."}}},{"id":"ufw-status-active","machine":"cible","part":"p2","title":{"fr":"Confirmer la nouvelle configuration du pare-feu","en":"Confirm the new firewall configuration"},"subtitle":{"fr":"Toujours sur la cible","en":"Still on the target"},"objective":{"fr":"Vérifier en détail la configuration du pare-feu désormais active : politique par défaut et règles en place.","en":"Check in detail the now-active firewall configuration: default policy and rules in place."},"lesson":{"fr":"<code>sudo ufw status</code> confirme juste que le pare-feu tourne. L'option <code>verbose</code> affiche en plus la <b>politique par défaut</b> (ce qui arrive à tout le trafic non couvert par une règle) et la liste complète des règles actives.","en":"<code>sudo ufw status</code> only confirms the firewall is running. The <code>verbose</code> option additionally shows the <b>default policy</b> (what happens to traffic with no matching rule) and the full list of active rules."},"action":"run","expect":"sudo ufw status verbose","analysis":{"fr":{"see":"<code>Status: active</code>. <code>Default: deny (incoming), allow (outgoing)</code>. Deux règles : <code>22/tcp ALLOW IN</code> et <code>80/tcp DENY IN</code>.","why":"La politique par défaut <b>deny (incoming)</b> s'applique à <b>tout</b> port qui n'a pas de règle explicite — y compris le 443, que nous n'avons jamais mentionné. C'est pour cela qu'il sera filtré au prochain scan, sans qu'aucune règle ne le cite.","keep":"Nous savons maintenant exactement ce que le pare-feu va faire, port par port, avant même de scanner. Vérifions-le depuis Kali."},"en":{"see":"<code>Status: active</code>. <code>Default: deny (incoming), allow (outgoing)</code>. Two rules: <code>22/tcp ALLOW IN</code> and <code>80/tcp DENY IN</code>.","why":"The default policy <b>deny (incoming)</b> applies to <b>any</b> port with no explicit rule — including port 443, which we never mentioned. That's why it will show filtered on the next scan, even though no rule names it.","keep":"We now know exactly what the firewall will do, port by port, before even scanning. Let's verify it from Kali."}}},{"id":"scan-ufw","machine":"kali","part":"p2","title":{"fr":"Scanner avec le pare-feu actif","en":"Scan with firewall active"},"subtitle":{"fr":"Retour sur Kali","en":"Back to Kali"},"objective":{"fr":"Refaire exactement le même scan que dans la Partie 1 et mesurer l'effet du pare-feu sur chaque port.","en":"Redo exactly the same scan as in Part 1 and measure the firewall's effect on each port."},"lesson":{"fr":"Même commande que dans la Partie 1 (<code>scan-apache</code>). Seule variable modifiée : le pare-feu. Observez attentivement la colonne STATE.","en":"Same command as in Part 1 (<code>scan-apache</code>). Only variable changed: the firewall. Watch the STATE column carefully."},"action":"run","expect":"nmap -n -p 22,80,443 192.168.86.131","analysis":{"fr":{"see":"22 est toujours open. <b>80 est devenu filtered.</b> Et surtout, <b>443 est passé de closed à filtered</b>, alors qu'aucune règle ne le cite. Le scan est plus long.","why":"<b>filtered</b> signifie que Nmap n'a reçu aucune réponse. Le pare-feu jette les paquets avant qu'ils n'atteignent l'application. Le 443 est filtré par la <b>politique par défaut</b> <code>deny incoming</code>, pas par une règle explicite. Le scan est plus long car Nmap attend, puis retransmet, pour s'assurer qu'il n'y a vraiment pas de réponse.","keep":"<b>Un port filtré ne veut pas dire que le service est arrêté.</b> Nous allons vérifier cela des deux côtés : d'abord dans les journaux du pare-feu, puis directement sur la cible."},"en":{"see":"22 is still open. <b>80 is now filtered.</b> And importantly, <b>443 moved from closed to filtered</b>, though no rule cites it. The scan takes longer.","why":"<b>filtered</b> means Nmap got no reply. The firewall drops packets before they reach the application. Port 443 is filtered by the <b>default policy</b> <code>deny incoming</code>, not by an explicit rule. Scans take longer because Nmap waits and retransmits to confirm there really is no reply.","keep":"<b>A filtered port doesn't mean the service is stopped.</b> We'll verify that from both sides: first in the firewall logs, then directly on the target."}}},{"id":"ufw-log","machine":"cible","part":"p2","title":{"fr":"Lire les traces du pare-feu","en":"Read the firewall traces"},"subtitle":{"fr":"Retour sur la cible","en":"Back on the target"},"objective":{"fr":"Retrouver, dans les journaux du pare-feu, la trace des paquets bloqués pendant le scan précédent.","en":"Find, in the firewall logs, the trace of packets blocked during the previous scan."},"lesson":{"fr":"Chaque paquet refusé par <code>ufw</code> est journalisé dans <code>/var/log/ufw.log</code> avec la mention <code>[UFW BLOCK]</code>. C'est la preuve, côté cible, de ce que Nmap a mesuré de l'extérieur en voyant des ports <code>filtered</code>.","en":"Every packet refused by <code>ufw</code> is logged to <code>/var/log/ufw.log</code> with a <code>[UFW BLOCK]</code> line. That's the target-side proof of what Nmap measured from outside as <code>filtered</code> ports."},"action":"run","expect":"sudo tail -n 5 /var/log/ufw.log","analysis":{"fr":{"see":"Plusieurs lignes <code>[UFW BLOCK] IN=ens33 ... SRC=192.168.86.132 DST=192.168.86.131 ... DPT=80</code> (et <code>DPT=443</code>), chacune en double — le scan retransmet.","why":"<code>SRC</code> est Kali, <code>DPT</code> le port visé. Chaque sonde SYN jetée par le pare-feu génère une ligne : c'est exactement ce qui a rendu le scan précédent plus lent, et ce qui explique l'état <code>filtered</code> vu par Nmap.","keep":"<b>Un port filtré laisse une trace côté cible</b>, même si Nmap, lui, ne reçoit rien. Les journaux sont une source d'information que l'attaquant externe n'a pas."},"en":{"see":"Several <code>[UFW BLOCK] IN=ens33 ... SRC=192.168.86.132 DST=192.168.86.131 ... DPT=80</code> lines (and <code>DPT=443</code>), each duplicated — the scan retransmits.","why":"<code>SRC</code> is Kali, <code>DPT</code> the targeted port. Every SYN probe dropped by the firewall logs a line: that's exactly what made the previous scan slower, and what explains the <code>filtered</code> state Nmap saw.","keep":"<b>A filtered port leaves a trace on the target side</b>, even though Nmap itself receives nothing. Logs are a source of information the external attacker doesn't have."}}},{"id":"verify-apache-alive","machine":"cible","part":"p2","title":{"fr":"Vérifier qu'Apache tourne toujours","en":"Verify Apache is still running"},"subtitle":{"fr":"Toujours sur la cible","en":"Still on the target"},"objective":{"fr":"Confirmer, depuis la cible elle-même, qu'Apache écoute toujours malgré le filtrage vu depuis Kali.","en":"Confirm, from the target itself, that Apache is still listening despite the filtering seen from Kali."},"lesson":{"fr":"Même commande qu'au tout début du lab : <code>ss -tln</code>. Si Apache avait réellement été arrêté, le port 80 aurait disparu de cette liste. S'il n'a fait que se faire masquer par le pare-feu, il sera toujours là.","en":"Same command as at the very start of the lab: <code>ss -tln</code>. If Apache had actually been stopped, port 80 would be gone from this list. If it was merely masked by the firewall, it will still be there."},"action":"run","expect":"ss -tln","analysis":{"fr":{"see":"Le port 80 est toujours présent : une ligne <code>LISTEN</code> sur <code>*:80</code>, exactement comme avant d'activer le pare-feu.","why":"<code>ufw</code> agit au niveau du <b>réseau</b> (le noyau Linux jette les paquets avant qu'ils n'atteignent le processus). Il n'arrête, ne redémarre et ne configure aucun service : Apache continue de tourner, simplement injoignable depuis l'extérieur sur ce port.","keep":"<b>Conclusion de la Partie 2 :</b> un pare-feu change ce que l'extérieur peut atteindre, pas ce qui est installé ou en cours d'exécution. Pour un audit, la vue interne (<code>ss</code>) et la vue externe (<code>nmap</code>) racontent deux histoires différentes et complémentaires."},"en":{"see":"Port 80 is still present: a <code>LISTEN</code> line on <code>*:80</code>, exactly as before enabling the firewall.","why":"<code>ufw</code> acts at the <b>network</b> level (the Linux kernel drops packets before they reach the process). It doesn't stop, restart or reconfigure any service: Apache keeps running, simply unreachable from outside on that port.","keep":"<b>Part 2 conclusion:</b> a firewall changes what the outside can reach, not what's installed or running. For an audit, the inside view (<code>ss</code>) and the outside view (<code>nmap</code>) tell two different, complementary stories."}}},{"id":"bilan","machine":"intro","action":"none","title":{"fr":"Bilan et compétences acquises","en":"Summary and skills gained"},"lesson":{"fr":"<b>Vous avez terminé le laboratoire, en deux parties.</b><br><br><b>Partie 1 — pare-feu désactivé :</b> vous avez cartographié la cible sans aucune restriction, lu les ports ouverts/fermés, détecté les versions de service, découvert les hôtes du réseau, ajouté un service (Apache) et observé son effet, puis relevé la trace d'un scan dans les journaux applicatifs.<br><br><b>Partie 2 — pare-feu actif :</b> vous avez activé <code>ufw</code> avec des règles précises, vérifié sa configuration avant de scanner, mesuré son effet sur chaque port, retrouvé la trace des paquets bloqués dans les journaux du pare-feu, puis confirmé depuis la cible qu'un service filtré reste installé et actif.<br><br>Vous savez maintenant :<br><br>• Interpréter les états <code>open</code>, <code>closed</code>, <code>filtered</code> et expliquer la différence.<br>• Utiliser Nmap avec <code>-n</code>, <code>-p</code>, <code>-p-</code>, <code>-sV</code>, <code>-sn</code>.<br>• Corréler la vue externe (Nmap) à la vue interne (<code>ss</code>, <code>ufw status</code>).<br>• Comprendre qu'un service installé n'est pas forcément exposé, et qu'un pare-feu masque sans supprimer.<br>• Lire les traces d'un scan, côté application (Apache) comme côté réseau (ufw).<br>• Distinguer <b>observation</b>, <b>hypothèse</b>, <b>risque à vérifier</b> et <b>vulnérabilité confirmée</b>. Ce dernier point est la base d'un rapport d'audit crédible.<br><br>Dans ce lab, <b>aucune vulnérabilité n'a été confirmée</b>. Un scan de reconnaissance délimite l'exposition, il ne prouve pas de faille.","en":"<b>You've finished the lab, in two parts.</b><br><br><b>Part 1 — firewall disabled:</b> you mapped the target with no restriction, read open/closed ports, detected service versions, discovered hosts on the network, added a service (Apache) and observed its effect, then found a scan's trace in the application logs.<br><br><b>Part 2 — firewall active:</b> you enabled <code>ufw</code> with precise rules, checked its configuration before scanning, measured its effect on every port, found the trace of blocked packets in the firewall logs, then confirmed from the target that a filtered service stays installed and running.<br><br>You can now:<br><br>• Interpret <code>open</code>, <code>closed</code>, <code>filtered</code> states and explain the difference.<br>• Use Nmap with <code>-n</code>, <code>-p</code>, <code>-p-</code>, <code>-sV</code>, <code>-sn</code>.<br>• Correlate the outside view (Nmap) with the inside view (<code>ss</code>, <code>ufw status</code>).<br>• Understand that an installed service isn't necessarily exposed, and that a firewall masks without removing.<br>• Read scan traces, on the application side (Apache) and the network side (ufw).<br>• Tell apart <b>observation</b>, <b>hypothesis</b>, <b>risk to verify</b> and <b>confirmed vulnerability</b>. This last point is the foundation of a credible audit report.<br><br>In this lab, <b>no vulnerability was confirmed</b>. A reconnaissance scan maps exposure, it doesn't prove a flaw."}}];
+</script>
+<script>
+(function(){
+'use strict';
+
+/* ---------- state + storage ---------- */
+const LS_KEY = 'nmaplab-sim-v1';
+function loadState(){
+  try{ return JSON.parse(localStorage.getItem(LS_KEY)||'null'); }catch(e){ return null; }
+}
+function saveState(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify({mission:cur, lang:lang, done:done, target:serializeTarget()})); }catch(e){}
+}
+function serializeTarget(){
+  return {ssh:tgt.ssh,apache:tgt.apache,apacheInstalled:tgt.apacheInstalled,https:tgt.https,ufw:tgt.ufw,ufwEver:tgt.ufwEver,nat:tgt.nat,rules:tgt.rules.slice()};
+}
+
+const $ = id=>document.getElementById(id);
+const t = k => UI[lang][k] || k;
+
+let lang = 'fr';
+let cur = 0;
+let done = []; // ids of completed missions
+let tgt = ENGINE.newState();
+
+// Terminal state: separate history per machine
+const TERMS = {
+  kali: { blocks:[], hist:[], hp:0 },
+  cible: { blocks:[], hist:[], hp:0 }
+};
+let active = 'kali';
+let lastAnalysisMission = null;
+let resumeAt = null;
+
+/* ---------- Prompts réels ---------- */
+function promptHtmlKali(){
+  return '<span class="kp1">┌──(</span><span class="user">kali</span>㉿<span class="host">labkali</span><span class="kp1">)-[</span><span class="path">~</span><span class="kp1">]</span>';
+}
+function promptEndKali(){ return '<span class="kp2">└─$</span> '; }
+function promptHtmlCible(){
+  return '<span class="user">labuser</span><span class="at">@</span><span class="host">cible-lab</span>:<span class="path">~</span>$ ';
+}
+
+/* ---------- Render terminal ---------- */
+function renderPrompt(){
+  const el = $('prompt-top');
+  const end = $('prompt-end');
+  if (active === 'kali'){
+    el.innerHTML = promptHtmlKali();
+    end.innerHTML = '<span class="kp2">└─$</span>';
+  } else {
+    el.innerHTML = '';
+    end.innerHTML = promptHtmlCible();
+  }
+}
+
+function colorizeNmap(text){
+  const div = document.createElement('div');
+  const lines = text.split('\n');
+  lines.forEach((line,i)=>{
+    const m = /^(\d+\/(?:tcp|udp)\s+)(open\|filtered|open|closed|filtered|unfiltered)(.*)$/.exec(line);
+    if (m){
+      div.appendChild(document.createTextNode(m[1]));
+      const s = document.createElement('span');
+      const cls = {'open':'st-open','closed':'st-closed','filtered':'st-filtered','unfiltered':'st-unfiltered','open|filtered':'st-of'}[m[2]];
+      s.className = cls; s.textContent = m[2];
+      div.appendChild(s);
+      div.appendChild(document.createTextNode(m[3]));
+    } else {
+      div.appendChild(document.createTextNode(line));
+    }
+    if (i < lines.length-1) div.appendChild(document.createTextNode('\n'));
+  });
+  return div;
+}
+
+function renderBlock(b){
+  const frag = document.createDocumentFragment();
+  if (b.type === 'sys'){
+    const d = document.createElement('div'); d.className='sys'; d.textContent=b.text;
+    frag.appendChild(d); return frag;
+  }
+  if (b.type === 'cmd'){
+    const top = document.createElement('div');
+    top.innerHTML = b.term === 'kali' ? promptHtmlKali() : '';
+    const line = document.createElement('div');
+    const p = document.createElement('span');
+    p.innerHTML = b.term === 'kali' ? promptEndKali() : promptHtmlCible();
+    line.appendChild(p);
+    line.appendChild(document.createTextNode(b.text));
+    frag.appendChild(top);
+    frag.appendChild(line);
+    return frag;
+  }
+  if (b.type === 'res'){
+    const txt = b.msg ? ENGINE.msg(b.msg) : b.text;
+    if (txt){
+      if (b.kind === 'err'){
+        const d = document.createElement('div'); d.className='err out'; d.textContent=txt;
+        frag.appendChild(d);
+      } else {
+        const d = colorizeNmap(txt); d.className='out';
+        frag.appendChild(d);
+      }
+    }
+    return frag;
+  }
+  return frag;
+}
+
+function paintScreen(){
+  const s = $('screen');
+  s.innerHTML = '';
+  const T = TERMS[active];
+  const banner = document.createElement('div');
+  banner.className = 'sys';
+  banner.textContent = active === 'kali' ? t('banner_kali') : t('banner_cible');
+  s.appendChild(banner);
+  T.blocks.forEach(b => s.appendChild(renderBlock(b)));
+  s.scrollTop = s.scrollHeight;
+  renderPrompt();
+  const titleEl = $('term-title');
+  titleEl.textContent = active === 'kali' ? 'kali@labkali: ~' : 'Ubuntu Server · tty1';
+}
+
+function pushBlock(term, b){
+  TERMS[term].blocks.push(b);
+  if (term === active){
+    const s = $('screen');
+    s.appendChild(renderBlock(b));
+    s.scrollTop = s.scrollHeight;
+  }
+}
+
+function switchMachine(m){
+  active = m;
+  $('tab-kali').setAttribute('aria-selected', String(m === 'kali'));
+  $('tab-cible').setAttribute('aria-selected', String(m === 'cible'));
+  const term = $('term');
+  term.classList.remove('kali','cible');
+  term.classList.add(m);
+  paintScreen();
+  syncPanelFromState();
+  updateMissionBtns();
+}
+
+/* ---------- Normalisation de commande ---------- */
+function normCmd(s){
+  return s.trim().replace(/\s+/g,' ');
+}
+function cmdMatches(input, expected){
+  if (Array.isArray(expected)) return expected.some(e => cmdMatches(input, e));
+  // allow same tokens in a different order for `-p 22,80,443` style
+  return normCmd(input) === normCmd(expected);
+}
+
+/* ---------- Exécution d'une commande ---------- */
+function run(line){
+  const T = TERMS[active];
+  const trimmed = line.trim();
+  if (trimmed){ T.hist.push(trimmed); T.hp = T.hist.length; }
+  pushBlock(active, {type:'cmd', term:active, text:line});
+  if (trimmed === 'clear'){ T.blocks=[]; paintScreen(); return; }
+  if (!trimmed) return;
+  const res = (active === 'kali') ? ENGINE.execKali(tgt,trimmed) : ENGINE.execCible(tgt,trimmed);
+  pushBlock(active, {type:'res', text:res.text, kind:res.kind, msg:res.msg});
+  syncPanelFromState();
+  // Trigger mission analysis if matches
+  checkMissionAfterCommand(trimmed, res);
+  refreshSequenceTodo();
+  saveState();
+}
+
+/* ---------- Missions ---------- */
+function M(){ return MISSIONS[cur]; }
+function missionCompleted(id){ return done.indexOf(id) >= 0; }
+
+function partStepInfo(m){
+  const list = MISSIONS.filter(x=>x.part===m.part);
+  return { i: list.indexOf(m)+1, total: list.length };
+}
+function renderPartTag(m){
+  const tag = $('m-tag');
+  if (!m.part){
+    tag.innerHTML = '<span class="part-pill meta">' + t(m.id==='bilan' ? 'partOutroLabel' : 'partIntroLabel') + '</span>';
+    return;
+  }
+  const info = partStepInfo(m);
+  const cls = m.part === 'p1' ? 'off' : 'on';
+  tag.innerHTML = '<span class="part-pill '+cls+'">' + t(m.part+'Label') + ' · ' + t(m.part+'Title') + '</span>' +
+    '<span class="part-step">' + t('step') + ' ' + info.i + '/' + info.total + '</span>';
+}
+function renderPartBanner(m){
+  const b = $('m-partintro');
+  if (!m.partIntro){ b.hidden = true; return; }
+  b.hidden = false;
+  b.className = 'part-banner ' + (m.part === 'p1' ? 'off' : 'on');
+  $('m-partintro-title').textContent = t(m.part+'Label') + ' · ' + t(m.part+'Title');
+  $('m-partintro-goal').textContent = t(m.part+'Goal');
+}
+function refreshSequenceTodo(){
+  const m = M();
+  if (m.action !== 'sequence') return;
+  const hist = TERMS[m.machine].hist;
+  const seq = document.createElement('div'); seq.className='todo-seq';
+  m.expect.forEach(c=>{
+    const d = document.createElement('div');
+    const done = hist.some(h=>cmdMatches(h,c));
+    if (done) d.className = 'seq-done';
+    d.textContent = (done ? '\u2713 ' : '\u2022 ') + c;
+    seq.appendChild(d);
+  });
+  const cmd = $('m-todocmd'); cmd.innerHTML=''; cmd.appendChild(seq);
+}
+
+function renderMission(){
+  const m = M();
+  renderPartTag(m);
+  $('m-h').textContent = m.title[lang];
+  $('m-sub').innerHTML = m.subtitle ? m.subtitle[lang] : '';
+  $('m-sub').hidden = !m.subtitle;
+  renderPartBanner(m);
+  const obj = $('m-obj');
+  if (m.objective){ obj.hidden = false; $('m-obj-text').innerHTML = m.objective[lang]; } else { obj.hidden = true; }
+  const pr = $('m-prereq');
+  if (m.prereq){ pr.hidden = false; $('m-prereq-text').innerHTML = m.prereq[lang]; } else { pr.hidden = true; }
+  $('m-lesson').innerHTML = m.lesson[lang];
+
+  // Concepts
+  const ce = $('m-concepts');
+  if (m.concepts){
+    ce.innerHTML = '<h4>'+t('concepts')+'</h4>' + m.concepts[lang].map(c =>
+      '<div class="concept"><div class="concept-name">'+c[0]+'</div><div class="concept-def">'+c[1]+'</div></div>'
+    ).join('');
+    ce.hidden = false;
+  } else {
+    ce.hidden = true;
+  }
+
+  // Todo
+  const td = $('m-todo');
+  if (m.action === 'run'){
+    td.hidden = false;
+    $('m-todocmd').textContent = m.expect;
+    $('m-todocmd').style.display='';
+    $('btn-fill').hidden = false;
+    $('btn-done').hidden = true;
+    $('m-todolabel').textContent = t('do');
+  } else if (m.action === 'sequence'){
+    td.hidden = false;
+    refreshSequenceTodo();
+    $('btn-fill').hidden = false;
+    $('btn-done').hidden = true;
+    $('m-todolabel').textContent = t('do');
+  } else {
+    td.hidden = false;
+    $('m-todocmd').textContent = t('nothing');
+    $('btn-fill').hidden = true;
+    $('btn-done').hidden = false;
+    $('m-todolabel').textContent = t('do');
+  }
+  $('m-fb').hidden = true;
+
+  // Switch machine if needed (but not for 'intro')
+  if (m.machine === 'kali' || m.machine === 'cible'){
+    if (active !== m.machine) switchMachine(m.machine);
+  }
+
+  updateMissionBtns();
+  updateProgress();
+
+  // Reset analysis
+  if (lastAnalysisMission !== m.id){
+    renderAnalysis(null);
+  }
+}
+
+function updateMissionBtns(){
+  const m = M();
+  $('btn-prev').disabled = cur === 0;
+  const completed = missionCompleted(m.id) || m.action === 'none';
+  const last = cur === MISSIONS.length-1;
+  $('btn-next').disabled = !completed;
+  $('btn-prev').textContent = '← ' + t('prevMission');
+  $('btn-next').textContent = last ? t('finish') : (t('nextMission')+' →');
+}
+
+function updateProgress(){
+  const n = done.length;
+  const total = MISSIONS.length;
+  $('p-text').textContent = t('mission')+' '+(cur+1)+'/'+total;
+  const pct = Math.round(((cur+1)/total)*100);
+  $('p-fill').style.width = pct + '%';
+}
+
+function renderAnalysis(m){
+  const wrap = $('analysis');
+  const empty = $('a-empty');
+  wrap.querySelectorAll('.a-block').forEach(e=>e.remove());
+  if (!m){
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  const a = m.analysis[lang] || m.analysis['fr'];
+  if (!a) return;
+  const sections = [['see',t('see')],['why',t('why')],['keep',t('keep')]];
+  sections.forEach(([k,label])=>{
+    if (!a[k]) return;
+    const d = document.createElement('div');
+    d.className = 'a-block ' + k;
+    d.innerHTML = '<h4>'+label+'</h4>'+a[k];
+    wrap.appendChild(d);
+  });
+  lastAnalysisMission = m.id;
+}
+
+function checkMissionAfterCommand(cmd, res){
+  const m = M();
+  if (m.action === 'run'){
+    // wrong machine?
+    if ((m.machine === 'kali' && active !== 'kali') || (m.machine === 'cible' && active !== 'cible')){
+      return;
+    }
+    if (cmdMatches(cmd, m.expect)){
+      // requirements?
+      if (m.requires){
+        const ok = Object.keys(m.requires).every(k => tgt[k] === m.requires[k]);
+        if (!ok){
+          const fb = $('m-fb'); fb.className='feedback err'; fb.hidden=false;
+          fb.innerHTML = m.requires_msg[lang];
+          return;
+        }
+      }
+      markDone(m.id);
+      renderAnalysis(m);
+      // Auto-after effects (e.g. NAT -> false)
+      if (m.auto_after){
+        Object.keys(m.auto_after).forEach(k => { tgt[k] = m.auto_after[k]; });
+        syncPanelFromState();
+      }
+    }
+  } else if (m.action === 'sequence'){
+    if ((m.machine === 'kali' && active !== 'kali') || (m.machine === 'cible' && active !== 'cible')){
+      return;
+    }
+    // check if all expected commands have been run
+    const T = TERMS[m.machine];
+    const allRun = m.expect.every(ex => T.hist.some(h => cmdMatches(h, ex)));
+    if (allRun){
+      markDone(m.id);
+      renderAnalysis(m);
+    }
+  }
+}
+
+function markDone(id){
+  if (!missionCompleted(id)) done.push(id);
+  updateMissionBtns();
+  updateProgress();
+  saveState();
+}
+
+function tryFill(){
+  const m = M();
+  if (m.action === 'run'){
+    // Check machine first
+    if ((m.machine === 'kali' && active !== 'kali') || (m.machine === 'cible' && active !== 'cible')){
+      const fb = $('m-fb'); fb.className='feedback err'; fb.hidden=false;
+      fb.textContent = t('wrongMachine');
+      return;
+    }
+    $('cmd').value = m.expect;
+    $('cmd').focus();
+  } else if (m.action === 'sequence'){
+    if ((m.machine === 'kali' && active !== 'kali') || (m.machine === 'cible' && active !== 'cible')){
+      switchMachine(m.machine);
+    }
+    // Execute sequence automatically
+    m.expect.forEach(c => { run(c); });
+  }
+}
+
+/* ---------- Control panel ---------- */
+function syncPanelFromState(){
+  $('c-ssh').checked = tgt.ssh;
+  $('c-apache').checked = tgt.apache;
+  $('c-https').checked = tgt.https;
+  $('c-ufw').checked = tgt.ufw;
+  $('c-nat').checked = tgt.nat;
+  [22,80,443].forEach(p => {
+    const r = ENGINE.getRule(tgt,p,'tcp');
+    $('r-'+p).value = r || 'none';
+  });
+}
+
+function buildRuleSelects(){
+  const opts = [['none',t('noneRule')],['allow',t('allow')],['deny',t('deny')],['reject',t('reject')]];
+  [22,80,443].forEach(p => {
+    const s = $('r-'+p);
+    s.innerHTML = opts.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('');
+  });
+}
+
+function wirePanel(){
+  $('c-ssh').addEventListener('change',e=>{ tgt.ssh = e.target.checked; saveState(); });
+  $('c-apache').addEventListener('change',e=>{ tgt.apache = e.target.checked; if(e.target.checked) tgt.apacheInstalled=true; saveState(); });
+  $('c-https').addEventListener('change',e=>{ tgt.https = e.target.checked; saveState(); });
+  $('c-ufw').addEventListener('change',e=>{ tgt.ufw = e.target.checked; if(e.target.checked) tgt.ufwEver=true; saveState(); });
+  $('c-nat').addEventListener('change',e=>{ tgt.nat = e.target.checked; saveState(); });
+  [22,80,443].forEach(p => {
+    $('r-'+p).addEventListener('change',e => { ENGINE.setRule(tgt,p,'tcp',e.target.value); saveState(); });
+  });
+  $('q-ufw').addEventListener('click',()=>{
+    tgt.rules = [{port:22,proto:'tcp',action:'allow'},{port:80,proto:'tcp',action:'deny'}];
+    tgt.ufw = true; tgt.ufwEver=true;
+    syncPanelFromState(); saveState();
+    checkMissionAfterCommand('', {});
+  });
+}
+
+/* ---------- Events ---------- */
+function wireAll(){
+  $('tab-kali').addEventListener('click',()=>switchMachine('kali'));
+  $('tab-cible').addEventListener('click',()=>switchMachine('cible'));
+  // Soumission du formulaire (fallback)
+  $('cmd-form').addEventListener('submit',e=>{
+    e.preventDefault();
+    const v = $('cmd').value;
+    $('cmd').value = '';
+    run(v);
+  });
+  // Gestionnaire direct : Entrée exécute, flèches naviguent l'historique, Ctrl+L efface
+  $('cmd').addEventListener('keydown',e=>{
+    const T = TERMS[active];
+    if (e.key === 'Enter' && !e.shiftKey){
+      e.preventDefault();
+      e.stopPropagation();
+      const v = e.target.value;
+      e.target.value = '';
+      run(v);
+      return;
+    }
+    if (e.key === 'ArrowUp'){
+      if (T.hp > 0){ T.hp--; e.target.value = T.hist[T.hp]; }
+      e.preventDefault();
+    } else if (e.key === 'ArrowDown'){
+      if (T.hp < T.hist.length-1){ T.hp++; e.target.value = T.hist[T.hp]; }
+      else { T.hp = T.hist.length; e.target.value=''; }
+      e.preventDefault();
+    } else if (e.ctrlKey && e.key === 'l'){
+      e.preventDefault(); T.blocks=[]; paintScreen();
+    }
+  });
+  $('screen').addEventListener('click',()=>{ if (!window.getSelection().toString()) $('cmd').focus(); });
+  $('btn-next').addEventListener('click',()=>{
+    if (cur < MISSIONS.length-1){ cur++; renderMission(); saveState(); }
+    else { showFinishModal(); }
+  });
+  $('btn-prev').addEventListener('click',()=>{
+    if (cur > 0){ cur--; renderMission(); saveState(); }
+  });
+  $('btn-fill').addEventListener('click',tryFill);
+  $('btn-done').addEventListener('click',()=>{
+    const m = M();
+    markDone(m.id);
+    if (cur < MISSIONS.length-1){ cur++; renderMission(); saveState(); }
+    else { showFinishModal(); }
+  });
+  $('btn-restart').addEventListener('click',()=>{
+    if (confirm(t('confirmRestart'))){
+      localStorage.removeItem(LS_KEY);
+      location.reload();
+    }
+  });
+  $('fm-restart').addEventListener('click',()=>{
+    localStorage.removeItem(LS_KEY);
+    location.reload();
+  });
+  $('fm-quit').addEventListener('click',()=>{
+    try{ window.close(); }catch(e){}
+  });
+  $('lang-sel').addEventListener('change',e=>{
+    lang = e.target.value;
+    applyLang();
+    saveState();
+  });
+}
+
+function showFinishModal(){
+  $('fm-h').textContent = t('congratsTitle');
+  $('fm-b').textContent = t('congratsBody');
+  $('fm-hint').textContent = t('congratsQuitHint');
+  $('fm-restart').textContent = t('congratsRestart');
+  $('fm-quit').textContent = t('congratsQuit');
+  $('finish-modal').hidden = false;
+}
+
+function applyLang(){
+  ENGINE.setLang(lang);
+  document.documentElement.lang = lang;
+  document.title = t('title');
+  // Static labels (textContent puis attribut title)
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el=>{
+    el.setAttribute('title', t(el.dataset.i18nTitle));
+  });
+  $('p-text').textContent = t('mission')+' '+(cur+1)+'/'+MISSIONS.length;
+  renderMission();
+  renderAnalysis(lastAnalysisMission ? MISSIONS.find(m=>m.id===lastAnalysisMission) : null);
+  buildRuleSelects();
+  syncPanelFromState();
+  // Modale de reprise encore ouverte
+  if (resumeAt !== null && !$('resume-modal').hidden){
+    $('rm-h').textContent = t('resumeTitle');
+    $('rm-b').textContent = t('resumeBody') + ' ' + (resumeAt+1) + ' / ' + MISSIONS.length;
+    $('rm-yes').textContent = t('resumeYes');
+    $('rm-no').textContent = t('resumeNo');
+  }
+  // Le terminal rejoue ses messages de simulation dans la nouvelle langue
+  paintScreen();
+  if (!$('finish-modal').hidden) showFinishModal();
+}
+
+function initStatic(){
+  // Fill all __X__ placeholders is done in Python. Here, just set the lang in UI.
+}
+
+/* ---------- Boot ---------- */
+function boot(){
+  buildRuleSelects();
+  wirePanel();
+  wireAll();
+  const saved = loadState();
+  if (saved && saved.mission !== undefined){
+    // Modal: resume or restart
+    lang = saved.lang || 'fr';
+    resumeAt = saved.mission;
+    $('lang-sel').value = lang;
+    const m = $('resume-modal');
+    $('rm-h').textContent = UI[lang]['resumeTitle'];
+    $('rm-b').textContent = UI[lang]['resumeBody'] + ' ' + (saved.mission+1) + ' / ' + MISSIONS.length;
+    $('rm-yes').textContent = UI[lang]['resumeYes'];
+    $('rm-no').textContent = UI[lang]['resumeNo'];
+    m.hidden = false;
+    $('rm-yes').onclick = ()=>{
+      cur = saved.mission;
+      done = saved.done || [];
+      if (saved.target){
+        Object.assign(tgt, saved.target);
+        tgt.rules = saved.target.rules || [];
+        tgt.logs = tgt.logs || {ufw:[],apache:[]};
+        tgt.files = tgt.files || {};
+      }
+      m.hidden = true;
+      resumeAt = null;
+      applyLang();
+      paintScreen();
+      syncPanelFromState();
+    };
+    $('rm-no').onclick = ()=>{
+      localStorage.removeItem(LS_KEY);
+      m.hidden = true;
+      resumeAt = null;
+      applyLang();
+      paintScreen();
+    };
+  } else {
+    applyLang();
+    paintScreen();
+  }
+}
+
+if (document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded',boot);
+} else {
+  boot();
+}
+})();
+</script>
+</body>
+</html>
